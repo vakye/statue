@@ -4,7 +4,7 @@ if [ ! -d build ]; then
     mkdir -p build;
 fi
 
-SourceFile="code/linux_platform.c"
+SourceFile="code/linux_entry.c"
 OutputFile="build/statue"
 
 Compiler="clang"

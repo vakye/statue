@@ -1,25 +1,37 @@
 
-void LinuxEntry(int ArgCount, char* Args[], char* Envp[])
-{
-    (void) ArgCount;
-    (void) Args;
-    (void) Envp;
+// ==================================================================
+// NOTE(vak): Linux implementation of platform.c
+// ==================================================================
 
-    __asm__ volatile (
-        "mov $231, %eax\n"
-        "mov $127, %rdi\n"
-        "syscall"
-    );
+#pragma once
+
+// ==================================================================
+// NOTE(vak): Standard file descriptors numbers
+// ==================================================================
+
+#define STDOUT_FILENO (1)
+#define STDERR_FILENO (2)
+
+// ==================================================================
+// NOTE(vak): Implementation
+// ==================================================================
+
+local usize WriteStdOut(void* Data, usize Size)
+{
+    ssize Written = write(STDOUT_FILENO, Data, Size);
+    usize Result = Maximum(0, Written);
+    return (Result);
 }
 
-__attribute__((naked))
-void EntryPoint(void)
+local usize WriteStdErr(void* Data, usize Size)
 {
-    __asm__ volatile (
-        "mov 0(%rsp),           %edi\n"   // NOTE(vak): ArgCount
-        "mov 8(%rsp),           %rsi\n"   // NOTE(vak): Args
-        "mov 8(%rsp, %rdi, 8),  %rdx\n"   // NOTE(vak): Envp
-        "call LinuxEntry\n"
-    );
+    ssize Written = write(STDERR_FILENO, Data, Size);
+    usize Result = Maximum(0, Written);
+    return (Result);
+}
+
+local void Exit(u8 Code)
+{
+    exit_group(Code);
 }
 
