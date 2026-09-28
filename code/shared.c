@@ -1,4 +1,16 @@
 
+// ==================================================================
+// NOTE(vak): A collection of commonly used definitions:
+//      + Compiler detection
+//      + Architecture detection
+//      + Operating system detection
+//      + Keywords
+//      + Macros
+//      + Types
+//      + Constants
+//      + UTF-8 string
+// ==================================================================
+
 #pragma once
 
 // ==================================================================
@@ -198,4 +210,88 @@ CompileTimeAssert(sizeof(f64) == 8);
 #define F64Eps   (2.22044604925031308085e-16f)
 #define F64Max   (1.79769313486231570815e+308)
 #define F64Min   (-F64Max)
+
+#define USizeBits (sizeof(usize) * 8)
+
+#define SSizeMin  ((ssize)(1ull << (USizeBits - 1)))
+#define SSizeMax  ((ssize)((usize)SSizeMin - 1))
+#define USizeMax  (~((usize)0))
+
+// ==================================================================
+// NOTE(vak): UTF-8 string
+// ==================================================================
+
+typedef struct
+{
+    char* Data;
+    usize Size;
+} string;
+
+#define NilString           (string){0}
+#define IsNilString(String) (!(String).Data || !(String).Size)
+
+#define Str(Literal)        (string){Literal, sizeof(Literal) - 1}
+#define StrData(Data, Size) (string){Data, Size}
+
+local string CString(char* Data)
+{
+    string Result = NilString;
+
+    if (Data)
+    {
+        Result = StrData(Data, 0);
+
+        while (Data[Result.Size] != '\0')
+            Result.Size++;
+    }
+
+    return (Result);
+}
+
+local string StringView(string Source, usize From, usize Size)
+{
+    From = Minimum(From, Source.Size);
+    Size = Minimum(Size, Source.Size - From);
+
+    string Result = StrData(Source.Data + From, Size);
+    return (Result);
+}
+
+local b32 StringEquals(string A, string B)
+{
+    b32 Result = (A.Size == B.Size);
+
+    if (Result)
+    {
+        for (usize Index = 0; Index < A.Size; Index++)
+        {
+            if (A.Data[Index] != B.Data[Index])
+            {
+                Result = false;
+                break;
+            }
+        }
+    }
+
+    return (Result);
+}
+
+local b32 StringStartsWith(string String, string Match)
+{
+    b32 Result = (String.Size >= Match.Size);
+
+    if (Result)
+    {
+        for (usize Index = 0; Index < Match.Size; Index++)
+        {
+            if (String.Data[Index] != Match.Data[Index])
+            {
+                Result = false;
+                break;
+            }
+        }
+    }
+
+    return (Result);
+}
 

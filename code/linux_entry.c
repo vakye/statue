@@ -39,3 +39,28 @@ void EntryPoint(void)
 #endif
 }
 
+// ==================================================================
+// NOTE(vak): Stupid CRT stuff
+// ==================================================================
+
+void* memset(void* DestInit, s32 Byte, usize Size)
+{
+    u8* Dest = (u8*)DestInit;
+
+    while (Size--)
+        *Dest++ = Byte;
+
+    return (DestInit);
+}
+
+void* memcpy(void* DestInit, const void* SourceInit, usize Size)
+{
+    u8* Dest = (u8*)DestInit;
+    u8* Source = (u8*)SourceInit;
+
+    while (Size--)
+        *Dest++ = *Source++;
+
+    return (DestInit);
+}
+
