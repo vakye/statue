@@ -14,11 +14,14 @@
 // NOTE(vak): Entry point
 // ==================================================================
 
-void LinuxEntry(int ArgCount, char* Args[], char* Envp[])
+void LinuxEntry(s32 ArgCount, char* Args[], char* Envp[])
 {
     Unused(ArgCount);
     Unused(Args);
-    Unused(Envp);
+
+    LinuxEquipEnvp(Envp);
+
+    Println(StdOut, GetEnv(Str("XDG_SESSION_TYPE")));
 
     Main();
     Exit(0);
@@ -30,8 +33,8 @@ void EntryPoint(void)
 #if ArchitectureX64
     __asm__ volatile (
         "mov 0(%rsp),           %edi\n"   // NOTE(vak): ArgCount
-        "mov 8(%rsp),           %rsi\n"   // NOTE(vak): Args
-        "mov 8(%rsp, %rdi, 8),  %rdx\n"   // NOTE(vak): Envp
+        "lea 8(%rsp),           %rsi\n"   // NOTE(vak): Args
+        "lea 16(%rsp, %rdi, 8), %rdx\n"   // NOTE(vak): Envp
         "call LinuxEntry\n"
     );
 #else

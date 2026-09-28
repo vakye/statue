@@ -108,7 +108,7 @@
     _Static_assert(Expression, "Compile-time assertion failed")
 
 #define IntegerToPointer(Integer) ((void*)((usize)(Integer)))
-#define PointerToInteger(Pointer) ((usize)(Pointer)))
+#define PointerToInteger(Pointer) ((usize)(Pointer))
 
 #define ArrayCount(Array) \
     (sizeof(Array) / sizeof((Array)[0]))

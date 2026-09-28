@@ -15,7 +15,7 @@ typedef enum
 #endif
 } syscall_nr;
 
-static usize LinuxSyscall(
+local usize LinuxSyscall(
     syscall_nr NR,
     usize Arg0, usize Arg1, usize Arg2,
     usize Arg3, usize Arg4, usize Arg5
@@ -55,13 +55,13 @@ static usize LinuxSyscall(
 #define LinuxSyscall5(NR, A0, A1, A2, A3, A4)       LinuxSyscall(NR, (usize)(A0), (usize)(A1), (usize)(A2), (usize)(A3), (usize)(A4), 0)
 #define LinuxSyscall6(NR, A0, A1, A2, A3, A4, A5)   LinuxSyscall(NR, (usize)(A0), (usize)(A1), (usize)(A2), (usize)(A3), (usize)(A4), (usize)(A5))
 
-static ssize write(s32 FileDescriptor, void* Data, usize Size)
+local ssize write(s32 FileDescriptor, void* Data, usize Size)
 {
     ssize Result = (ssize)LinuxSyscall3(SyscallNR_Write, FileDescriptor, Data, Size);
     return (Result);
 }
 
-static void exit_group(s32 Status)
+local void exit_group(s32 Status)
 {
     LinuxSyscall1(SyscallNR_ExitGroup, Status);
 }

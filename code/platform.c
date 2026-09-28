@@ -9,9 +9,10 @@
 // NOTE(vak): Interface
 // ==================================================================
 
-local usize WriteStdOut (void* Data, usize Size);
-local usize WriteStdErr (void* Data, usize Size);
-local void  Exit        (u8 Code);
+local string    GetEnv      (string Name);
+local usize     WriteStdOut (void* Data, usize Size);
+local usize     WriteStdErr (void* Data, usize Size);
+local void      Exit        (u8 Code);
 
 // ==================================================================
 // NOTE(vak): Implementations are contained inside *_platform.c

@@ -6,6 +6,22 @@
 #pragma once
 
 // ==================================================================
+// NOTE(vak): State
+// ==================================================================
+
+typedef struct
+{
+    char** Envp;
+} linux_state;
+
+local linux_state LinuxState = {0};
+
+local void LinuxEquipEnvp(char** Envp)
+{
+    LinuxState.Envp = Envp;
+}
+
+// ==================================================================
 // NOTE(vak): Standard file descriptors numbers
 // ==================================================================
 
@@ -15,6 +31,29 @@
 // ==================================================================
 // NOTE(vak): Implementation
 // ==================================================================
+
+local string GetEnv(string Name)
+{
+    string Found = NilString;
+
+    for (usize Index = 0; LinuxState.Envp[Index] != 0; Index++)
+    {
+        string Candidate = CString(LinuxState.Envp[Index]);
+
+        if (StringStartsWith(Candidate, Name))
+        {
+            Found = Candidate;
+            break;
+        }
+    }
+
+    string Result = NilString;
+
+    if (!IsNilString(Found))
+        Result = StringView(Found, Name.Size + 1, USizeMax);
+
+    return (Result);
+}
 
 local usize WriteStdOut(void* Data, usize Size)
 {
