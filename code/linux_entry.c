@@ -7,6 +7,7 @@
 // NOTE(vak): Internals
 // ==================================================================
 
+#include "vulkan_render.c"
 #include "linux_syscall.c"
 #include "linux_platform.c"
 

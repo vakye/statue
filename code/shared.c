@@ -4,6 +4,7 @@
 //      + Compiler detection
 //      + Architecture detection
 //      + Operating system detection
+//      + Intrinsics includes (immintrin.h, ...)
 //      + Keywords
 //      + Macros
 //      + Types
@@ -67,7 +68,7 @@
 #endif
 
 // ==================================================================
-// NOTE(vak): Operating system detection
+// note(vak): operating system detection
 // ==================================================================
 
 #if defined(_WIN32)
@@ -90,6 +91,14 @@
 
 #if !defined(PlatformMacOS)
     #define PlatformMacOS (0)
+#endif
+
+// ==================================================================
+// NOTE(vak): Intrinsics include
+// ==================================================================
+
+#if ArchitectureX64
+    #include <immintrin.h>
 #endif
 
 // ==================================================================

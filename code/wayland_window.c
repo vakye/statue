@@ -663,9 +663,7 @@ local void WaylandDisplayRoundtrip(void)
         WaylandEndRequest(&Request);
     }
 
-    WaylandHandleMessages();
-
-    if (!Wayland.ReceivedDone)
-        WaylandFatalError(Str("wl_display_sync sent but done event not received"));
+    while (!Wayland.ReceivedDone)
+        WaylandHandleMessages();
 }
 
