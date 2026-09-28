@@ -8,6 +8,7 @@
 //      + Macros
 //      + Types
 //      + Constants
+//      + Memory zero, fill, copy, ...
 //      + UTF-8 string
 // ==================================================================
 
@@ -216,6 +217,20 @@ CompileTimeAssert(sizeof(f64) == 8);
 #define SSizeMin  ((ssize)(1ull << (USizeBits - 1)))
 #define SSizeMax  ((ssize)((usize)SSizeMin - 1))
 #define USizeMax  (~((usize)0))
+
+// ==================================================================
+// NOTE(vak): Memory
+// ==================================================================
+
+void* memset(void* DestInit, s32 Byte, usize Size);
+void* memcpy(void* DestInit, const void* SourceInit, usize Size);
+
+local void MemoryZero(void* DestInit,                   usize Size) { memset(DestInit, 0,           Size); }
+local void MemoryFill(void* DestInit, u8 Byte,          usize Size) { memset(DestInit, Byte,        Size); }
+local void MemoryCopy(void* DestInit, void* SourceInit, usize Size) { memcpy(DestInit, SourceInit,  Size); }
+
+#define ZeroStruct(Pointer)         MemoryZero(Pointer,         sizeof(*(Pointer)))
+#define ZeroArray(FixedSizeArray)   MemoryZero(FixedSizeArray,  sizeof(FixedSizeArray))
 
 // ==================================================================
 // NOTE(vak): UTF-8 string

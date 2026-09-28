@@ -5,10 +5,51 @@
 
 #pragma once
 
+// ==================================================================
+// NOTE(vak): Standard file descriptors numbers
+// ==================================================================
+
+#define STDOUT_FILENO (1)
+#define STDERR_FILENO (2)
+
+// ==================================================================
+// NOTE(vak): Socket
+// ==================================================================
+
+#define AF_UNIX     (1)
+#define SOCK_STREAM (1)
+
+struct sockaddr_un
+{
+    u16     sun_family;
+    char    sun_path[108];    
+};
+
+struct sockaddr;
+
+// ==================================================================
+// NOTE(vak): Syscall wrappers implemented by this file
+// ==================================================================
+
+local s32   socket      (s32 Domain, s32 Type, s32 Protocol);
+local s32   connect     (s32 SocketFD, const struct sockaddr* Address, u32 AddressLength);
+local ssize send        (s32 SocketFD, const void* Buffer, usize Size, s32 Flags);
+local ssize recv        (s32 SocketFD, const void* Buffer, usize Size, s32 Flags);
+local ssize write       (s32 FileDescriptor, void* Data, usize Size);
+local void  exit_group  (s32 Status);
+
+// ==================================================================
+// NOTE(vak): Syscall
+// ==================================================================
+
 typedef enum
 {
 #if ArchitectureX64
     SyscallNR_Write         = (1),
+    SyscallNR_Socket        = (41),
+    SyscallNR_Connect       = (42),
+    SyscallNR_SendTo        = (44),
+    SyscallNR_RecvFrom      = (45),
     SyscallNR_ExitGroup     = (231),
 #else
     #error Linux syscall numbers are not defined for this architecture.
@@ -54,6 +95,44 @@ local usize LinuxSyscall(
 #define LinuxSyscall4(NR, A0, A1, A2, A3)           LinuxSyscall(NR, (usize)(A0), (usize)(A1), (usize)(A2), (usize)(A3), 0, 0)
 #define LinuxSyscall5(NR, A0, A1, A2, A3, A4)       LinuxSyscall(NR, (usize)(A0), (usize)(A1), (usize)(A2), (usize)(A3), (usize)(A4), 0)
 #define LinuxSyscall6(NR, A0, A1, A2, A3, A4, A5)   LinuxSyscall(NR, (usize)(A0), (usize)(A1), (usize)(A2), (usize)(A3), (usize)(A4), (usize)(A5))
+
+// ==================================================================
+// NOTE(vak): Syscall wrapper implementations
+// ==================================================================
+
+local s32 socket(s32 Domain, s32 Type, s32 Protocol)
+{
+    s32 Result = (s32)LinuxSyscall3(SyscallNR_Socket, Domain, Type, Protocol);
+    return (Result);
+}
+
+local s32 connect(s32 SocketFD, const struct sockaddr* Address, u32 AddressLength)
+{
+    s32 Result = (s32)LinuxSyscall3(SyscallNR_Connect, SocketFD, Address, AddressLength);
+    return (Result);
+}
+
+local ssize send(s32 SocketFD, const void* Buffer, usize Size, s32 Flags)
+{
+    ssize Result = (ssize)LinuxSyscall6(
+        SyscallNR_SendTo,
+        SocketFD, Buffer, Size, Flags,
+        0, 0
+    );
+
+    return (Result);
+}
+
+local ssize recv(s32 SocketFD, const void* Buffer, usize Size, s32 Flags)
+{
+    ssize Result = (ssize)LinuxSyscall6(
+        SyscallNR_RecvFrom,
+        SocketFD, Buffer, Size, Flags,
+        0, 0
+    );
+
+    return (Result);
+}
 
 local ssize write(s32 FileDescriptor, void* Data, usize Size)
 {
