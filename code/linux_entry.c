@@ -21,8 +21,6 @@ void LinuxEntry(s32 ArgCount, char* Args[], char* Envp[])
 
     LinuxEquipEnvp(Envp);
 
-    Println(StdOut, GetEnv(Str("XDG_SESSION_TYPE")));
-
     Main();
     Exit(0);
 }

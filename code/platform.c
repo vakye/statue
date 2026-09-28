@@ -9,6 +9,13 @@
 // NOTE(vak): Interface
 // ==================================================================
 
+local void      SetupWindow     (void);
+local u32       GetWindowSizeX  (void);
+local u32       GetWindowSizeY  (void);
+local b32       IsWindowClosed  (void);
+local void      PollEvents      (void);
+local void      PresentWindow   (void);
+
 local string    GetEnv      (string Name);
 local usize     WriteStdOut (void* Data, usize Size);
 local usize     WriteStdErr (void* Data, usize Size);

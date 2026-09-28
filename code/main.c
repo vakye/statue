@@ -9,5 +9,12 @@
 
 local void Main(void)
 {
+    SetupWindow();
+
+    while (!IsWindowClosed())
+    {
+        PollEvents();
+        PresentWindow();
+    }
 }
 

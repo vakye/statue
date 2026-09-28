@@ -32,6 +32,46 @@ local void LinuxEquipEnvp(char** Envp)
 // NOTE(vak): Implementation
 // ==================================================================
 
+#include "wayland_window.c"
+
+local void SetupWindow(void)
+{
+    string XdgSessionType = GetEnv(Str("XDG_SESSION_TYPE"));
+
+    if (!StringEquals(XdgSessionType, Str("wayland")))
+    {
+        Println(StdErr, Str("error: Only Wayland is supported for now."));
+        Exit(1);
+    }
+
+    WaylandSetupWindow();
+}
+
+local u32 GetWindowSizeX(void)
+{
+    return WaylandGetWindowSizeX();
+}
+
+local u32 GetWindowSizeY(void)
+{
+    return WaylandGetWindowSizeY();
+}
+
+local b32 IsWindowClosed(void)
+{
+    return WaylandIsWindowClosed();
+}
+
+local void PollEvents(void)
+{
+    WaylandPollEvents();
+}
+
+local void PresentWindow(void)
+{
+    WaylandPresentWindow();
+}
+
 local string GetEnv(string Name)
 {
     string Found = NilString;
