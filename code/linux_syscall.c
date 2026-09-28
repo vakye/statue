@@ -6,11 +6,62 @@
 #pragma once
 
 // ==================================================================
+// NOTE(vak): Open flags
+// ==================================================================
+
+#define O_RDONLY (0)
+
+// ==================================================================
 // NOTE(vak): Standard file descriptors numbers
 // ==================================================================
 
 #define STDOUT_FILENO (1)
 #define STDERR_FILENO (2)
+
+// ==================================================================
+// NOTE(vak): File stat
+// ==================================================================
+
+// NOTE(vak): We don't target 32 bit architectures so having
+// only the 64-bit version here should be okay.
+
+// NOTE(vak): Taken from /usr/include/asm-generic/stat.h
+
+struct stat
+{
+    u64 Device;
+    u64 FileSerialNumber;
+    u32 Mode;
+    u32 LinkCount;
+    u32 UserID;
+    u32 GroupID;
+    u64 DeviceNumber;
+    u64 Pad1;
+    s64 FileSize;
+    s32 BlockSize;
+    s32 Pad2;
+    s64 Blocks;
+    s64 AccessSec;
+    u64 AccessNanosec;
+    s64 ModificationSec;
+    u64 ModificationNanosec;
+    s64 StatusSec;
+    u64 StatusNanosec;
+    u32 Unused4;
+    u32 Unused5;
+};
+
+// ==================================================================
+// NOTE(vak): MMap
+// ==================================================================
+
+#define PROT_NONE   (0x0)
+#define PROT_READ   (0x1)
+#define PROT_WRITE  (0x2)
+#define PROT_EXEC   (0x4)
+
+#define MAP_PRIVATE (0x02)
+#define MAP_ANON    (0x20)
 
 // ==================================================================
 // NOTE(vak): Socket
@@ -31,11 +82,17 @@ struct sockaddr;
 // NOTE(vak): Syscall wrappers implemented by this file
 // ==================================================================
 
+local ssize read        (s32 FileDescriptor, void* Data, usize Size);
+local ssize write       (s32 FileDescriptor, void* Data, usize Size);
+local s32   open        (const char* Path, s32 Flags, s32 Mode);
+local s32   close       (s32 FileDescriptor);
+local s32   fstat       (s32 FileDescriptor, struct stat* Buffer);
+local void* mmap        (void* Base, usize Length, int ProtectionFlags, int Flags, int FileDescriptor, ssize Offset);
+local s32   mprotect    (void* Base, usize Length, int ProtectionFlags);
 local s32   socket      (s32 Domain, s32 Type, s32 Protocol);
 local s32   connect     (s32 SocketFD, const struct sockaddr* Address, u32 AddressLength);
 local ssize send        (s32 SocketFD, const void* Buffer, usize Size, s32 Flags);
 local ssize recv        (s32 SocketFD, const void* Buffer, usize Size, s32 Flags);
-local ssize write       (s32 FileDescriptor, void* Data, usize Size);
 local void  exit_group  (s32 Status);
 
 // ==================================================================
@@ -45,7 +102,13 @@ local void  exit_group  (s32 Status);
 typedef enum
 {
 #if ArchitectureX64
+    SyscallNR_Read          = (0),
     SyscallNR_Write         = (1),
+    SyscallNR_Open          = (2),
+    SyscallNR_Close         = (3),
+    SyscallNR_FStat         = (5),
+    SyscallNR_MMap          = (9),
+    SyscallNR_MProtect      = (10),
     SyscallNR_Socket        = (41),
     SyscallNR_Connect       = (42),
     SyscallNR_SendTo        = (44),
@@ -134,9 +197,65 @@ local ssize recv(s32 SocketFD, const void* Buffer, usize Size, s32 Flags)
     return (Result);
 }
 
+local ssize read(s32 FileDescriptor, void* Data, usize Size)
+{
+    ssize Result = (ssize)LinuxSyscall3(SyscallNR_Read, FileDescriptor, Data, Size);
+    return (Result);
+}
+
 local ssize write(s32 FileDescriptor, void* Data, usize Size)
 {
     ssize Result = (ssize)LinuxSyscall3(SyscallNR_Write, FileDescriptor, Data, Size);
+    return (Result);
+}
+
+local s32 open(const char* Path, int Flags, int Mode)
+{
+    s32 Result = (s32)LinuxSyscall3(SyscallNR_Open, Path, Flags, Mode);
+    return (Result);
+}
+
+local s32 close(s32 FileDescriptor)
+{
+    s32 Result = (s32)LinuxSyscall1(SyscallNR_Close, FileDescriptor);
+    return (Result);
+}
+
+local s32 fstat(s32 FileDescriptor, struct stat* Buffer)
+{
+    s32 Result = (s32)LinuxSyscall2(
+        SyscallNR_FStat,
+        FileDescriptor,
+        Buffer
+    );
+
+    return (Result);
+}
+
+local void* mmap(void* Base, usize Length, int ProtectionFlags, int Flags, int FileDescriptor, ssize Offset)
+{
+    void* Result = (void*)LinuxSyscall6(
+        SyscallNR_MMap,
+        Base,
+        Length,
+        ProtectionFlags,
+        Flags,
+        FileDescriptor,
+        Offset
+    );
+
+    return (Result);
+}
+
+local s32 mprotect(void* Base, usize Length, int ProtectionFlags)
+{
+    s32 Result = (s32)LinuxSyscall3(
+        SyscallNR_MProtect,
+        Base,
+        Length,
+        ProtectionFlags
+    );
+
     return (Result);
 }
 

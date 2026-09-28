@@ -176,8 +176,8 @@ CompileTimeAssert(sizeof(u16) == 2);
 CompileTimeAssert(sizeof(u32) == 4);
 CompileTimeAssert(sizeof(u64) == 8);
 
-CompileTimeAssert(sizeof(ssize) == sizeof(void*));
-CompileTimeAssert(sizeof(usize) == sizeof(void*));
+CompileTimeAssert(sizeof(ssize) == 8);
+CompileTimeAssert(sizeof(usize) == 8);
 
 CompileTimeAssert(sizeof(f32) == 4);
 CompileTimeAssert(sizeof(f64) == 8);

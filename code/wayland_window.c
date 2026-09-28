@@ -28,8 +28,8 @@ local void WaylandPresentWindow     (void);
 // NOTE(vak): Internal Interface
 // ==================================================================
 
-local void WaylandFatalError            (string Message);
-local u32  WaylandPushID                (void);
+local void WaylandFatalError (string Message);
+local u32  WaylandPushID     (void);
 
 typedef struct // NOTE(vak): 256 bytes
 {
@@ -39,10 +39,10 @@ typedef struct // NOTE(vak): 256 bytes
     u8  Data[248];
 } wayland_request;
 
-local void WaylandBeginRequest          (wayland_request* Request, u32 ObjectID, u16 OpCode);
-local void WaylandPushU32               (wayland_request* Request, u32 Value);
-local void WaylandPushString            (wayland_request* Request, string Value);
-local void WaylandEndRequest            (wayland_request* Request);
+local void WaylandBeginRequest              (wayland_request* Request, u32 ObjectID, u16 OpCode);
+local void WaylandPushU32                   (wayland_request* Request, u32 Value);
+local void WaylandPushString                (wayland_request* Request, string Value);
+local void WaylandEndRequest                (wayland_request* Request);
 
 typedef struct
 {
@@ -51,17 +51,17 @@ typedef struct
     usize   ConsumeAt;
 } wayland_receiver;
 
-local void      WaylandReceive          (wayland_receiver* Receiver);
-local u32       WaylandConsumeU32       (wayland_receiver* Receiver);
-local u16       WaylandConsumeU16       (wayland_receiver* Receiver);
-local string    WaylandConsumeString    (wayland_receiver* Receiver);
-local void      WaylandSkipBytes        (wayland_receiver* Receiver, usize Size);
+local void      WaylandReceive              (wayland_receiver* Receiver);
+local u32       WaylandConsumeU32           (wayland_receiver* Receiver);
+local u16       WaylandConsumeU16           (wayland_receiver* Receiver);
+local string    WaylandConsumeString        (wayland_receiver* Receiver);
+local void      WaylandSkipBytes            (wayland_receiver* Receiver, usize Size);
 
-local void WaylandDisplayConnect        (void);
-local void WaylandDisplayGetRegistry    (void);
-local void WaylandSetupSurface          (void);
-local void WaylandCommitSurface         (void);
-local void WaylandDisplayRoundtrip      (void);
+local void      WaylandDisplayConnect       (void);
+local void      WaylandDisplayGetRegistry   (void);
+local void      WaylandSetupSurface         (void);
+local void      WaylandCommitSurface        (void);
+local void      WaylandDisplayRoundtrip     (void);
 
 // ==================================================================
 // NOTE(vak): Implementation

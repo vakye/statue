@@ -65,6 +65,21 @@ local void PresentWindow(void)
     WaylandPresentWindow();
 }
 
+#include <dlfcn.h>
+
+local void* GetVulkanLoader(void)
+{
+    void* VulkanLibrary = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+
+    if (!VulkanLibrary)
+        VulkanLibrary = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+
+    if (!VulkanLibrary)
+        return (0);
+
+    return dlsym(VulkanLibrary, "vkGetInstanceProcAddr");
+}
+
 local string GetEnv(string Name)
 {
     string Found = NilString;

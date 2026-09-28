@@ -23,7 +23,8 @@ CompileFlags=" \
 LinkFlags=" \
     -fuse-ld=lld \
     -Wl,-nostdlib \
-    -Wl,--entry,EntryPoint"
+    -Wl,--entry,EntryPoint \
+    -lc"
 
 $Compiler $CompileFlags $SourceFile $LinkFlags
 
