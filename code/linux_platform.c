@@ -5,8 +5,11 @@
 
 #pragma once
 
+#include "wayland_window.c"
+#include <dlfcn.h>
+
 // ==================================================================
-// NOTE(vak): State
+// NOTE(vak): Implementation
 // ==================================================================
 
 typedef struct
@@ -14,18 +17,12 @@ typedef struct
     char** Envp;
 } linux_state;
 
-local linux_state LinuxState = {0};
+local linux_state Linux = {0};
 
 local void LinuxEquipEnvp(char** Envp)
 {
-    LinuxState.Envp = Envp;
+    Linux.Envp = Envp;
 }
-
-// ==================================================================
-// NOTE(vak): Implementation
-// ==================================================================
-
-#include "wayland_window.c"
 
 local void SetupWindow(void)
 {
@@ -65,8 +62,6 @@ local void PresentWindow(void)
     WaylandPresentWindow();
 }
 
-#include <dlfcn.h>
-
 local void* GetVulkanLoader(void)
 {
     void* VulkanLibrary = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
@@ -84,9 +79,9 @@ local string GetEnv(string Name)
 {
     string Found = NilString;
 
-    for (usize Index = 0; LinuxState.Envp[Index] != 0; Index++)
+    for (usize Index = 0; Linux.Envp[Index] != 0; Index++)
     {
-        string Candidate = CString(LinuxState.Envp[Index]);
+        string Candidate = CString(Linux.Envp[Index]);
 
         if (StringStartsWith(Candidate, Name))
         {

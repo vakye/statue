@@ -129,7 +129,7 @@
 #define Minimum(A, B) ((A) < (B) ? (A) : (B))
 #define Maximum(A, B) ((A) > (B) ? (A) : (B))
 
-#define Clamp(Min, Value, Max) Minimum(Max, Maximum(Min, Value))
+#define Clamp(Min, Value, Max) Maximum(Min, Minimum(Max, Value))
 
 #define KB(Amount) ((ssize)(Amount) << 10)
 #define MB(Amount) ((ssize)(Amount) << 20)
@@ -257,13 +257,13 @@ typedef struct
 #define Str(Literal)        (string){Literal, sizeof(Literal) - 1}
 #define StrData(Data, Size) (string){Data, Size}
 
-local string CString(char* Data)
+local string CString(const char* Data)
 {
     string Result = NilString;
 
     if (Data)
     {
-        Result = StrData(Data, 0);
+        Result = StrData((char*)Data, 0);
 
         while (Data[Result.Size] != '\0')
             Result.Size++;

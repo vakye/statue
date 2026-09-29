@@ -14,8 +14,8 @@ CompileFlags=" \
     -O0 \
     -ffreestanding \
     -fno-stack-protector \
-    -nostdlib \
     -std=c11 \
+    -nostdlib \
     -Wall -Wextra -Wpedantic -Werror \
     -Wno-unused-function \
     -o $OutputFile"
@@ -23,8 +23,9 @@ CompileFlags=" \
 LinkFlags=" \
     -fuse-ld=lld \
     -Wl,-nostdlib \
-    -Wl,--entry,EntryPoint \
-    -lc"
+    -Wl,-e,EntryPoint \
+    -lc \
+    -lwayland-client"
 
 $Compiler $CompileFlags $SourceFile $LinkFlags
 

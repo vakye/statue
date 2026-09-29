@@ -7,9 +7,11 @@
 // NOTE(vak): Internals
 // ==================================================================
 
-#include "vulkan_render.c"
 #include "linux_syscall.c"
 #include "linux_platform.c"
+
+#define VK_USE_PLATFORM_WAYLAND_KHR
+#include "vulkan_render.c"
 
 // ==================================================================
 // NOTE(vak): Entry point

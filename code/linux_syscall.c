@@ -64,21 +64,6 @@ struct stat
 #define MAP_ANON    (0x20)
 
 // ==================================================================
-// NOTE(vak): Socket
-// ==================================================================
-
-#define AF_UNIX     (1)
-#define SOCK_STREAM (1)
-
-struct sockaddr_un
-{
-    u16     sun_family;
-    char    sun_path[108];    
-};
-
-struct sockaddr;
-
-// ==================================================================
 // NOTE(vak): Syscall wrappers implemented by this file
 // ==================================================================
 
@@ -89,10 +74,6 @@ local s32   close       (s32 FileDescriptor);
 local s32   fstat       (s32 FileDescriptor, struct stat* Buffer);
 local void* mmap        (void* Base, usize Length, int ProtectionFlags, int Flags, int FileDescriptor, ssize Offset);
 local s32   mprotect    (void* Base, usize Length, int ProtectionFlags);
-local s32   socket      (s32 Domain, s32 Type, s32 Protocol);
-local s32   connect     (s32 SocketFD, const struct sockaddr* Address, u32 AddressLength);
-local ssize send        (s32 SocketFD, const void* Buffer, usize Size, s32 Flags);
-local ssize recv        (s32 SocketFD, const void* Buffer, usize Size, s32 Flags);
 local void  exit_group  (s32 Status);
 
 // ==================================================================
@@ -109,10 +90,6 @@ typedef enum
     SyscallNR_FStat         = (5),
     SyscallNR_MMap          = (9),
     SyscallNR_MProtect      = (10),
-    SyscallNR_Socket        = (41),
-    SyscallNR_Connect       = (42),
-    SyscallNR_SendTo        = (44),
-    SyscallNR_RecvFrom      = (45),
     SyscallNR_ExitGroup     = (231),
 #else
     #error Linux syscall numbers are not defined for this architecture.
@@ -162,40 +139,6 @@ local usize LinuxSyscall(
 // ==================================================================
 // NOTE(vak): Syscall wrapper implementations
 // ==================================================================
-
-local s32 socket(s32 Domain, s32 Type, s32 Protocol)
-{
-    s32 Result = (s32)LinuxSyscall3(SyscallNR_Socket, Domain, Type, Protocol);
-    return (Result);
-}
-
-local s32 connect(s32 SocketFD, const struct sockaddr* Address, u32 AddressLength)
-{
-    s32 Result = (s32)LinuxSyscall3(SyscallNR_Connect, SocketFD, Address, AddressLength);
-    return (Result);
-}
-
-local ssize send(s32 SocketFD, const void* Buffer, usize Size, s32 Flags)
-{
-    ssize Result = (ssize)LinuxSyscall6(
-        SyscallNR_SendTo,
-        SocketFD, Buffer, Size, Flags,
-        0, 0
-    );
-
-    return (Result);
-}
-
-local ssize recv(s32 SocketFD, const void* Buffer, usize Size, s32 Flags)
-{
-    ssize Result = (ssize)LinuxSyscall6(
-        SyscallNR_RecvFrom,
-        SocketFD, Buffer, Size, Flags,
-        0, 0
-    );
-
-    return (Result);
-}
 
 local ssize read(s32 FileDescriptor, void* Data, usize Size)
 {

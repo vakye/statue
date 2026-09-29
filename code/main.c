@@ -14,11 +14,6 @@ local void Main(void)
     SetupWindow();
     SetupRenderer();
 
-    void* MyVulkanLoader = GetVulkanLoader();
-
-    PrintUSize(StdOut, PointerToInteger(MyVulkanLoader));
-    PrintNewLine(StdOut);
-
     while (!IsWindowClosed())
     {
         PollEvents();
