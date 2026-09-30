@@ -5,10 +5,6 @@
 
 #pragma once
 
-#include "print.c"
-#include "math.c"
-#include "render.c"
-
 local void Main(void)
 {
     SetupWindow();

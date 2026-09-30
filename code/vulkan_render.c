@@ -106,6 +106,8 @@ typedef struct
 
 typedef struct
 {
+    arena_id                    ArenaID;
+
     u32                         VersionOfAPI;
     VkInstance                  Instance;
     VkSurfaceKHR                Surface;
@@ -129,11 +131,8 @@ typedef struct
     VkExtent2D                  SwapchainExtent;
     VkSwapchainKHR              Swapchain;
     u32                         SwapchainImageCount;
-
-    // TODO(vak): Arena allocation
-
-    VkImage                     SwapchainImages[16];
-    VkImageView                 SwapchainImageViews[16];
+    VkImage*                    SwapchainImages;
+    VkImageView*                SwapchainImageViews;
 
     v4                          ClearColor;
     u32                         ImageIndex;
@@ -242,6 +241,11 @@ local void VulkanCreateBuffer(
 
 local void SetupRenderer(void)
 {
+    // NOTE(vak): Arena
+    {
+        Vulkan.ArenaID = MakeArena(KB(64), GB(4));
+    }
+
     // NOTE(vak): Load non-instance functions
     {
         vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)GetVulkanLoader();
@@ -342,10 +346,21 @@ local void SetupRenderer(void)
 
     // NOTE(vak): Physical device
     {
-        // TODO(vak): Arena allocation
+        temporary_memory EnumerateMemory = BeginTemporaryMemory(Vulkan.ArenaID);
 
-        VkPhysicalDevice PhysicalDevices[64] = {0};
-        u32 PhysicalDeviceCount = ArrayCount(PhysicalDevices);
+        u32 PhysicalDeviceCount = 0;
+
+        VulkanCheck(vkEnumeratePhysicalDevices(
+            Vulkan.Instance,
+            &PhysicalDeviceCount,
+            0
+        ));
+
+        VkPhysicalDevice* PhysicalDevices = PushArenaArray(
+            EnumerateMemory.ArenaID,
+            VkPhysicalDevice,
+            PhysicalDeviceCount
+        );
 
         VulkanCheck(vkEnumeratePhysicalDevices(
             Vulkan.Instance,
@@ -380,14 +395,27 @@ local void SetupRenderer(void)
 
         if (!Vulkan.PhysicalDevice)
             VulkanFatalError(Str("no suitable physical device available"));
+
+        EndTemporaryMemory(EnumerateMemory);
     }
 
     // NOTE(vak): Queue family index
     {
-        // TODO(vak): Arena allocation
+        temporary_memory EnumerateMemory = BeginTemporaryMemory(Vulkan.ArenaID);
 
-        VkQueueFamilyProperties QueueFamiliesProperties[64] = {0};
-        u32 QueueFamilyCount = ArrayCount(QueueFamiliesProperties);
+        u32 QueueFamilyCount = 0;
+
+        vkGetPhysicalDeviceQueueFamilyProperties(
+            Vulkan.PhysicalDevice,
+            &QueueFamilyCount,
+            0
+        );
+
+        VkQueueFamilyProperties* QueueFamiliesProperties = PushArenaArray(
+            EnumerateMemory.ArenaID,
+            VkQueueFamilyProperties,
+            QueueFamilyCount
+        );
 
         vkGetPhysicalDeviceQueueFamilyProperties(
             Vulkan.PhysicalDevice,
@@ -427,6 +455,8 @@ local void SetupRenderer(void)
 
         if (Vulkan.QueueFamilyIndex == U32Max)
             VulkanFatalError(Str("failed to select suitable queue family"));
+
+        EndTemporaryMemory(EnumerateMemory);
     }
 
     // NOTE(vak): Device
@@ -511,10 +541,22 @@ local void SetupRenderer(void)
 
     // NOTE(vak): Swapchain format
     {
-        // TODO(vak): Arena allocation
+        temporary_memory EnumerateMemory = BeginTemporaryMemory(Vulkan.ArenaID);
 
-        VkSurfaceFormatKHR SurfaceFormats[512] = {0};
-        u32 SurfaceFormatCount = ArrayCount(SurfaceFormats);
+        u32 SurfaceFormatCount = 0;
+
+        VulkanCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(
+            Vulkan.PhysicalDevice,
+            Vulkan.Surface,
+            &SurfaceFormatCount,
+            0
+        ));
+
+        VkSurfaceFormatKHR* SurfaceFormats = PushArenaArray(
+            EnumerateMemory.ArenaID,
+            VkSurfaceFormatKHR,
+            SurfaceFormatCount
+        );
 
         VulkanCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(
             Vulkan.PhysicalDevice,
@@ -543,14 +585,28 @@ local void SetupRenderer(void)
 
         if (!Vulkan.SwapchainFormat.format)
             VulkanFatalError(Str("failed to select suitable image format for swapchain"));
+
+        EndTemporaryMemory(EnumerateMemory);
     }
 
     // NOTE(vak): Present mode
     {
-        // TODO(vak): Arena allocation
+        temporary_memory EnumerateMemory = BeginTemporaryMemory(Vulkan.ArenaID);
 
-        VkPresentModeKHR PresentModes[64] = {0};
-        u32 PresentModeCount = ArrayCount(PresentModes);
+        u32 PresentModeCount = 0;
+
+        VulkanCheck(vkGetPhysicalDeviceSurfacePresentModesKHR(
+            Vulkan.PhysicalDevice,
+            Vulkan.Surface,
+            &PresentModeCount,
+            0
+        ));
+
+        VkPresentModeKHR* PresentModes = PushArenaArray(
+            EnumerateMemory.ArenaID,
+            VkPresentModeKHR,
+            PresentModeCount
+        );
 
         VulkanCheck(vkGetPhysicalDeviceSurfacePresentModesKHR(
             Vulkan.PhysicalDevice,
@@ -571,6 +627,8 @@ local void SetupRenderer(void)
                 break;
             }
         }
+
+        EndTemporaryMemory(EnumerateMemory);
     }
 
     // NOTE(vak): Descriptor set layout
@@ -801,6 +859,31 @@ local void BeginRendering(void)
         {
             VulkanCheck(vkDeviceWaitIdle(Vulkan.Device));
 
+            VkSurfaceCapabilitiesKHR SurfaceCapabilities = {0};
+            VulkanCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+                Vulkan.PhysicalDevice,
+                Vulkan.Surface,
+                &SurfaceCapabilities
+            ));
+
+            if (!Vulkan.SwapchainImages)
+            {
+                Vulkan.SwapchainImages = PushArenaArray(
+                    Vulkan.ArenaID,
+                    VkImage,
+                    SurfaceCapabilities.maxImageCount
+                );
+
+                Vulkan.SwapchainImageViews = PushArenaArray(
+                    Vulkan.ArenaID,
+                    VkImageView,
+                    SurfaceCapabilities.maxImageCount
+                );
+
+                ZeroArray(Vulkan.SwapchainImages, SurfaceCapabilities.maxImageCount);
+                ZeroArray(Vulkan.SwapchainImageViews, SurfaceCapabilities.maxImageCount);
+            }
+
             for (u32 Index = 0; Index < Vulkan.SwapchainImageCount; Index++)
                 if (Vulkan.SwapchainImageViews[Index])
                     vkDestroyImageView(Vulkan.Device, Vulkan.SwapchainImageViews[Index], 0);
@@ -810,13 +893,6 @@ local void BeginRendering(void)
 
             Vulkan.SwapchainExtent.width  = WindowSizeX;
             Vulkan.SwapchainExtent.height = WindowSizeY;
-
-            VkSurfaceCapabilitiesKHR SurfaceCapabilities = {0};
-            VulkanCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
-                Vulkan.PhysicalDevice,
-                Vulkan.Surface,
-                &SurfaceCapabilities
-            ));
 
             u32 DesiredImageCount = 3;
 
@@ -845,7 +921,7 @@ local void BeginRendering(void)
 
             VulkanCheck(vkCreateSwapchainKHR(Vulkan.Device, &SwapchainInfo, 0, &Vulkan.Swapchain));
 
-            Vulkan.SwapchainImageCount = ArrayCount(Vulkan.SwapchainImages);
+            Vulkan.SwapchainImageCount = SurfaceCapabilities.maxImageCount;
 
             VulkanCheck(vkGetSwapchainImagesKHR(
                 Vulkan.Device,
@@ -1005,7 +1081,7 @@ local void EndRendering(void)
         vkCmdBeginRendering(Vulkan.CommandBuffer, &RenderingInfo);
     }
 
-    // NOTE(vak): Draw a colorful triangle
+    // NOTE(vak): Dispatch draw
     if (Vulkan.VertexCount)
     {
         vkCmdBindPipeline(Vulkan.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, Vulkan.Pipeline);

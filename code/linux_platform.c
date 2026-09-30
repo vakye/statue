@@ -75,6 +75,29 @@ local void* GetVulkanLoader(void)
     return dlsym(VulkanLibrary, "vkGetInstanceProcAddr");
 }
 
+local void* ReserveMemory(usize Size)
+{
+    void* Result = mmap(0, Size, PROT_NONE, MAP_PRIVATE|MAP_ANON, -1, 0);
+
+    if ((ssize)PointerToInteger(Result) < 0)
+    {
+        Println(StdErr, Str("error: failed to reserve memory"));
+        Exit(1);
+    }
+
+    return (Result);
+}
+
+local void CommitMemory(void* Memory, usize Size)
+{
+    s32 Result = mprotect(Memory, Size, PROT_READ|PROT_WRITE);
+    if (Result < 0)
+    {
+        Println(StdErr, Str("error: failed to commit memory"));
+        Exit(1);
+    }
+}
+
 local string GetEnv(string Name)
 {
     string Found = NilString;

@@ -238,8 +238,8 @@ local void MemoryZero(void* DestInit,                   usize Size) { memset(Des
 local void MemoryFill(void* DestInit, u8 Byte,          usize Size) { memset(DestInit, Byte,        Size); }
 local void MemoryCopy(void* DestInit, void* SourceInit, usize Size) { memcpy(DestInit, SourceInit,  Size); }
 
-#define ZeroStruct(Pointer)         MemoryZero(Pointer,         sizeof(*(Pointer)))
-#define ZeroArray(FixedSizeArray)   MemoryZero(FixedSizeArray,  sizeof(FixedSizeArray))
+#define ZeroStruct(Pointer)         MemoryZero(Pointer, sizeof(*(Pointer)))
+#define ZeroArray(Pointer, Count)   MemoryZero(Pointer, sizeof(*(Pointer)) * (Count))
 
 // ==================================================================
 // NOTE(vak): UTF-8 string

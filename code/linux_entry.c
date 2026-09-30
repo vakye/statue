@@ -1,6 +1,10 @@
 
 #include "shared.c"
+#include "math.c"
 #include "platform.c"
+#include "print.c"
+#include "memory.c"
+#include "render.c"
 #include "main.c"
 
 // ==================================================================
