@@ -46,6 +46,12 @@ local PFN_vkEnumerateInstanceVersion    vkEnumerateInstanceVersion = 0;
     \
     X(vkCreateSemaphore) \
     \
+    X(vkCreateShaderModule) \
+    X(vkDestroyShaderModule) \
+    \
+    X(vkCreatePipelineLayout) \
+    X(vkCreateGraphicsPipelines) \
+    \
     X(vkCreateImageView) \
     X(vkDestroyImageView) \
     \
@@ -61,6 +67,10 @@ local PFN_vkEnumerateInstanceVersion    vkEnumerateInstanceVersion = 0;
     X(vkCmdPipelineBarrier) \
     X(vkCmdBeginRendering) \
     X(vkCmdEndRendering) \
+    X(vkCmdBindPipeline) \
+    X(vkCmdSetViewport) \
+    X(vkCmdSetScissor) \
+    X(vkCmdDraw) \
     \
     X(vkQueueSubmit) \
     X(vkQueuePresentKHR) \
@@ -91,6 +101,9 @@ typedef struct
     VkSemaphore         SubmitSemaphore;
     VkSurfaceFormatKHR  SwapchainFormat;
     VkPresentModeKHR    PresentMode;
+
+    VkPipelineLayout    PipelineLayout;
+    VkPipeline          Pipeline;
 
     VkExtent2D          SwapchainExtent;
     VkSwapchainKHR      Swapchain;
@@ -443,6 +456,174 @@ local void SetupRenderer(void)
             }
         }
     }
+
+    // NOTE(vak): Pipeline layout
+    {
+        VkPipelineLayoutCreateInfo PipelineLayoutInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        };
+
+        VulkanCheck(vkCreatePipelineLayout(Vulkan.Device, &PipelineLayoutInfo, 0, &Vulkan.PipelineLayout));
+    }
+
+    // NOTE(vak): Pipeline
+    {
+        persist u32 VertexCode[] =
+        {
+            #include "shaders/basic.vert.h"
+        };
+
+        persist u32 FragmentCode[] =
+        {
+            #include "shaders/basic.frag.h"
+        };
+
+        VkShaderModuleCreateInfo VertexModuleInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = sizeof(VertexCode),
+            .pCode = VertexCode,
+        };
+
+        VkShaderModuleCreateInfo FragmentModuleInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = sizeof(FragmentCode),
+            .pCode = FragmentCode,
+        };
+
+        VkShaderModule VertexModule = {0};
+        VkShaderModule FragmentModule = {0};
+
+        VulkanCheck(vkCreateShaderModule(Vulkan.Device, &VertexModuleInfo, 0, &VertexModule));
+        VulkanCheck(vkCreateShaderModule(Vulkan.Device, &FragmentModuleInfo, 0, &FragmentModule));
+
+        VkPipelineShaderStageCreateInfo StageInfos[] =
+        {
+            {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                .module = VertexModule,
+                .pName = "main",
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .module = FragmentModule,
+                .pName = "main",
+            },
+        };
+
+        VkPipelineVertexInputStateCreateInfo VertexInputStateInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        };
+
+        VkPipelineInputAssemblyStateCreateInfo InputAssemblyStateInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+            .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        };
+
+        VkPipelineTessellationStateCreateInfo TessellationStateInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,
+        };
+
+        VkPipelineViewportStateCreateInfo ViewportStateInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+            .viewportCount = 1,
+            .pViewports = &(VkViewport){0},
+            .scissorCount = 1,
+            .pScissors = &(VkRect2D){0},
+        };
+
+        VkPipelineRasterizationStateCreateInfo RasterizationStateInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            .polygonMode = VK_POLYGON_MODE_FILL,
+            .cullMode = VK_CULL_MODE_NONE,
+            .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+            .lineWidth = 1.0f,
+        };
+
+        VkPipelineMultisampleStateCreateInfo MultisampleStateInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+            .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        };
+
+        VkPipelineDepthStencilStateCreateInfo DepthStencilStateInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        };
+
+        VkPipelineColorBlendStateCreateInfo ColorBlendStateInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+            .attachmentCount = 1,
+            .pAttachments = &(VkPipelineColorBlendAttachmentState)
+            {
+                .blendEnable = VK_TRUE,
+                .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .colorBlendOp = VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = VK_BLEND_OP_ADD,
+                .colorWriteMask =
+                    VK_COLOR_COMPONENT_R_BIT |
+                    VK_COLOR_COMPONENT_G_BIT |
+                    VK_COLOR_COMPONENT_B_BIT |
+                    VK_COLOR_COMPONENT_A_BIT,
+            },
+        };
+
+        VkDynamicState DynamicStates[] =
+        {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR,
+        };
+
+        VkPipelineDynamicStateCreateInfo DynamicStateInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+            .dynamicStateCount = ArrayCount(DynamicStates),
+            .pDynamicStates = DynamicStates,
+        };
+
+        VkPipelineRenderingCreateInfo RenderingInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+            .colorAttachmentCount = 1,
+            .pColorAttachmentFormats = &Vulkan.SwapchainFormat.format,
+        };
+
+        VkGraphicsPipelineCreateInfo PipelineInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+            .pNext = &RenderingInfo,
+            .stageCount = ArrayCount(StageInfos),
+            .pStages = StageInfos,
+            .pVertexInputState = &VertexInputStateInfo,
+            .pInputAssemblyState = &InputAssemblyStateInfo,
+            .pTessellationState = &TessellationStateInfo,
+            .pViewportState = &ViewportStateInfo,
+            .pRasterizationState = &RasterizationStateInfo,
+            .pMultisampleState = &MultisampleStateInfo,
+            .pDepthStencilState = &DepthStencilStateInfo,
+            .pColorBlendState = &ColorBlendStateInfo,
+            .pDynamicState = &DynamicStateInfo,
+            .layout = Vulkan.PipelineLayout,
+        };
+
+        VulkanCheck(vkCreateGraphicsPipelines(Vulkan.Device, 0, 1, &PipelineInfo, 0, &Vulkan.Pipeline));
+
+        vkDestroyShaderModule(Vulkan.Device, FragmentModule, 0);
+        vkDestroyShaderModule(Vulkan.Device, VertexModule, 0);
+    }
 }
 
 local void SetClearColor(v4 Color)
@@ -633,6 +814,32 @@ local void EndRendering(void)
         };
 
         vkCmdBeginRendering(Vulkan.CommandBuffer, &RenderingInfo);
+    }
+
+    // NOTE(vak): Draw a colorful triangle
+    {
+        vkCmdBindPipeline(Vulkan.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, Vulkan.Pipeline);
+
+        VkViewport Viewport =
+        {
+            .x = 0.0f,
+            .y = (f32)Vulkan.SwapchainExtent.height,
+            .width = (f32)Vulkan.SwapchainExtent.width,
+            .height = -(f32)Vulkan.SwapchainExtent.height,
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f,
+        };
+
+        VkRect2D Scissor =
+        {
+            .offset = {.x = 0, .y = 0},
+            .extent = Vulkan.SwapchainExtent,
+        };
+
+        vkCmdSetViewport(Vulkan.CommandBuffer, 0, 1, &Viewport);
+        vkCmdSetScissor(Vulkan.CommandBuffer, 0, 1, &Scissor);
+
+        vkCmdDraw(Vulkan.CommandBuffer, 3, 1, 0, 0);
     }
 
     // NOTE(vak): End rendering

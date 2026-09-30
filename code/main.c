@@ -18,7 +18,7 @@ local void Main(void)
     {
         PollEvents();
 
-        SetClearColor(V4(0.07f, 0.08f, 0.1f, 1.0f));
+        SetClearColor(V4(0.9f, 0.9f, 0.9f, 1.0f));
         BeginRendering();
         EndRendering();
 

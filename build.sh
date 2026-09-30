@@ -4,6 +4,16 @@ if [ ! -d build ]; then
     mkdir -p build;
 fi
 
+pushd code/shaders > /dev/null
+
+for SourceFile in *.vert *.frag; do
+    OutputFile="$SourceFile.h"
+
+    glslangValidator --target-env vulkan1.4 -x $SourceFile -o $OutputFile
+done
+
+popd > /dev/null
+
 SourceFile="code/linux_entry.c"
 OutputFile="build/statue"
 
@@ -28,4 +38,8 @@ LinkFlags=" \
     -lwayland-client"
 
 $Compiler $CompileFlags $SourceFile $LinkFlags
+
+if [ $? -eq 0 ]; then
+    echo $(basename $SourceFile)
+fi
 
