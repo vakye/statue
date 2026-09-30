@@ -12,6 +12,7 @@
 local void SetupRenderer    (void);
 local void SetClearColor    (v4 Color);
 local void BeginRendering   (void);
+local void RenderRect       (rect2 Rect, v4 Color);
 local void EndRendering     (void);
 
 // ==================================================================

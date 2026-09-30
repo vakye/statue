@@ -32,6 +32,7 @@ local PFN_vkEnumerateInstanceVersion    vkEnumerateInstanceVersion = 0;
 #define VulkanAllFunctions(X) \
     X(vkEnumeratePhysicalDevices) \
     X(vkGetPhysicalDeviceProperties) \
+    X(vkGetPhysicalDeviceMemoryProperties) \
     X(vkGetPhysicalDeviceQueueFamilyProperties) \
     X(vkGetPhysicalDeviceSurfaceSupportKHR) \
     X(vkGetPhysicalDeviceSurfaceFormatsKHR) \
@@ -49,8 +50,16 @@ local PFN_vkEnumerateInstanceVersion    vkEnumerateInstanceVersion = 0;
     X(vkCreateShaderModule) \
     X(vkDestroyShaderModule) \
     \
+    X(vkCreateDescriptorSetLayout) \
     X(vkCreatePipelineLayout) \
     X(vkCreateGraphicsPipelines) \
+    \
+    X(vkAllocateMemory) \
+    X(vkMapMemory) \
+    \
+    X(vkCreateBuffer) \
+    X(vkGetBufferMemoryRequirements) \
+    X(vkBindBufferMemory) \
     \
     X(vkCreateImageView) \
     X(vkDestroyImageView) \
@@ -70,6 +79,7 @@ local PFN_vkEnumerateInstanceVersion    vkEnumerateInstanceVersion = 0;
     X(vkCmdBindPipeline) \
     X(vkCmdSetViewport) \
     X(vkCmdSetScissor) \
+    X(vkCmdPushDescriptorSet) \
     X(vkCmdDraw) \
     \
     X(vkQueueSubmit) \
@@ -88,35 +98,54 @@ local PFN_vkEnumerateInstanceVersion    vkEnumerateInstanceVersion = 0;
 
 typedef struct
 {
-    u32                 VersionOfAPI;
-    VkInstance          Instance;
-    VkSurfaceKHR        Surface;
-    VkPhysicalDevice    PhysicalDevice;
-    u32                 QueueFamilyIndex;
-    VkDevice            Device;
-    VkQueue             Queue;
-    VkCommandPool       CommandPool;
-    VkCommandBuffer     CommandBuffer;
-    VkSemaphore         AcquireSemaphore;
-    VkSemaphore         SubmitSemaphore;
-    VkSurfaceFormatKHR  SwapchainFormat;
-    VkPresentModeKHR    PresentMode;
+    VkBuffer        Buffer;
+    VkDeviceMemory  Memory;
+    usize           Size;
+    void*           Mapping;
+} vulkan_buffer;
 
-    VkPipelineLayout    PipelineLayout;
-    VkPipeline          Pipeline;
+typedef struct
+{
+    u32                         VersionOfAPI;
+    VkInstance                  Instance;
+    VkSurfaceKHR                Surface;
+    VkPhysicalDevice            PhysicalDevice;
+    u32                         QueueFamilyIndex;
+    VkDevice                    Device;
+    VkQueue                     Queue;
+    VkCommandPool               CommandPool;
+    VkCommandBuffer             CommandBuffer;
+    VkSemaphore                 AcquireSemaphore;
+    VkSemaphore                 SubmitSemaphore;
+    VkSurfaceFormatKHR          SwapchainFormat;
+    VkPresentModeKHR            PresentMode;
 
-    VkExtent2D          SwapchainExtent;
-    VkSwapchainKHR      Swapchain;
-    u32                 SwapchainImageCount;
+    VkDescriptorSetLayout       SetLayout;
+    VkPipelineLayout            PipelineLayout;
+    VkPipeline                  Pipeline;
+
+    vulkan_buffer               VertexBuffer;
+
+    VkExtent2D                  SwapchainExtent;
+    VkSwapchainKHR              Swapchain;
+    u32                         SwapchainImageCount;
 
     // TODO(vak): Arena allocation
 
-    VkImage             SwapchainImages[16];
-    VkImageView         SwapchainImageViews[16];
+    VkImage                     SwapchainImages[16];
+    VkImageView                 SwapchainImageViews[16];
 
-    v4                  ClearColor;
-    u32                 ImageIndex;
+    v4                          ClearColor;
+    u32                         ImageIndex;
+    u32                         VertexCount;
 } vulkan_state;
+
+typedef struct
+{
+    v2 Position;
+    v2 TexCoord;
+    v4 Color;
+} vulkan_vertex;
 
 local vulkan_state Vulkan = {0};
 
@@ -130,6 +159,86 @@ local void VulkanFatalError(string Message)
 #define VulkanCheck(VulkanCall) \
     if ((VulkanCall) != VK_SUCCESS) \
         VulkanFatalError(Str("'" #VulkanCall "' failed"));
+
+local u32 VulkanSelectMemoryType(
+    VkMemoryPropertyFlags   PropertyFlags,
+    u32                     MemoryTypeBits
+)
+{
+    u32 Result = U32Max;
+
+    VkPhysicalDeviceMemoryProperties MemoryProperties = {0};
+    vkGetPhysicalDeviceMemoryProperties(Vulkan.PhysicalDevice, &MemoryProperties);
+
+    for (u32 Index = 0; Index < MemoryProperties.memoryTypeCount; Index++)
+    {
+        if ((MemoryTypeBits & (1 << Index)) == 0)
+            continue;
+
+        VkMemoryType* MemoryType = MemoryProperties.memoryTypes + Index;
+
+        if ((MemoryType->propertyFlags & PropertyFlags) == PropertyFlags)
+        {
+            Result = Index;
+            break;
+        }
+    }
+
+    if (Result == U32Max)
+        VulkanFatalError(Str("unable to select a suitable memory type"));
+
+    return (Result);
+}
+
+local void VulkanCreateBuffer(
+    vulkan_buffer*          Buffer,
+    usize                   Size,
+    VkBufferUsageFlags      UsageFlags,
+    VkMemoryPropertyFlags   MemoryPropertyFlags,
+    b32                     Mapped)
+{
+    ZeroStruct(Buffer);
+
+    Buffer->Size = Size;
+
+    VkBufferCreateInfo BufferInfo =
+    {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = Buffer->Size,
+        .usage = UsageFlags,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    };
+
+    VulkanCheck(vkCreateBuffer(Vulkan.Device, &BufferInfo, 0, &Buffer->Buffer));
+
+    VkMemoryRequirements MemoryRequirements = {0};
+    vkGetBufferMemoryRequirements(Vulkan.Device, Buffer->Buffer, &MemoryRequirements);
+
+    VkMemoryAllocateInfo AllocateInfo =
+    {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = MemoryRequirements.size,
+        .memoryTypeIndex = VulkanSelectMemoryType(
+            MemoryPropertyFlags,
+            MemoryRequirements.memoryTypeBits
+        ),
+    };
+
+    VulkanCheck(vkAllocateMemory(Vulkan.Device, &AllocateInfo, 0, &Buffer->Memory));
+    VulkanCheck(vkBindBufferMemory(Vulkan.Device, Buffer->Buffer, Buffer->Memory, 0));
+
+    if (Mapped)
+    {
+        VulkanCheck(vkMapMemory(
+            Vulkan.Device,
+            Buffer->Memory,
+            0,
+            Buffer->Size,
+            0,
+            &Buffer->Mapping
+        ));
+    }
+}
 
 local void SetupRenderer(void)
 {
@@ -327,9 +436,16 @@ local void SetupRenderer(void)
             "VK_KHR_swapchain",
         };
 
+        VkPhysicalDeviceVulkan14Features Vulkan14Features =
+        {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+            .pushDescriptor = true,
+        };
+
         VkPhysicalDeviceVulkan13Features Vulkan13Features =
         {
             .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+            .pNext = &Vulkan14Features,
             .dynamicRendering = true,
         };
 
@@ -457,11 +573,36 @@ local void SetupRenderer(void)
         }
     }
 
+    // NOTE(vak): Descriptor set layout
+    {
+        VkDescriptorSetLayoutBinding Bindings[] =
+        {
+            {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            },
+        };
+
+        VkDescriptorSetLayoutCreateInfo SetLayoutInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT,
+            .bindingCount = ArrayCount(Bindings),
+            .pBindings = Bindings,
+        };
+
+        VulkanCheck(vkCreateDescriptorSetLayout(Vulkan.Device, &SetLayoutInfo, 0, &Vulkan.SetLayout));
+    }
+
     // NOTE(vak): Pipeline layout
     {
         VkPipelineLayoutCreateInfo PipelineLayoutInfo =
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts = &Vulkan.SetLayout,
         };
 
         VulkanCheck(vkCreatePipelineLayout(Vulkan.Device, &PipelineLayoutInfo, 0, &Vulkan.PipelineLayout));
@@ -624,6 +765,23 @@ local void SetupRenderer(void)
         vkDestroyShaderModule(Vulkan.Device, FragmentModule, 0);
         vkDestroyShaderModule(Vulkan.Device, VertexModule, 0);
     }
+
+    // NOTE(vak): Vertex buffer
+    {
+        usize MaxRectPerDraw = 16384;
+        usize MaxVerticesPerDraw = MaxRectPerDraw * 6;
+        usize VertexBufferSize = MaxVerticesPerDraw * sizeof(vulkan_vertex);
+
+        VulkanCreateBuffer(
+            &Vulkan.VertexBuffer,
+            VertexBufferSize,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT|
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT|
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            VK_TRUE
+        );
+    }
 }
 
 local void SetClearColor(v4 Color)
@@ -737,6 +895,37 @@ local void BeginRendering(void)
             &Vulkan.ImageIndex
         ));
     }
+
+    // NOTE(vak): Reset
+    {
+        Vulkan.VertexCount = 0;
+    }
+}
+
+local void RenderRect(rect2 Rect, v4 Color)
+{
+    usize MaxVertexCount = Vulkan.VertexBuffer.Size / sizeof(vulkan_vertex);
+
+    // TODO(vak): Support multiple draws in one frame, so we don't
+    // have to panic when the vertex buffer runs out of space.
+
+    if (Vulkan.VertexCount + 6 > MaxVertexCount)
+        VulkanFatalError(Str("vertex buffer out of space"));
+
+    vulkan_vertex* V = (vulkan_vertex*)Vulkan.VertexBuffer.Mapping + Vulkan.VertexCount;
+
+    v2 Min = Rect.Min;
+    v2 Max = Rect.Max;
+
+    V[0] = (vulkan_vertex){V2(Min.X, Min.Y), V2(0.0f, 0.0f), Color};
+    V[1] = (vulkan_vertex){V2(Max.X, Min.Y), V2(1.0f, 0.0f), Color};
+    V[2] = (vulkan_vertex){V2(Max.X, Max.Y), V2(1.0f, 1.0f), Color};
+
+    V[3] = (vulkan_vertex){V2(Max.X, Max.Y), V2(1.0f, 1.0f), Color};
+    V[4] = (vulkan_vertex){V2(Min.X, Max.Y), V2(0.0f, 1.0f), Color};
+    V[5] = (vulkan_vertex){V2(Min.X, Min.Y), V2(0.0f, 0.0f), Color};
+
+    Vulkan.VertexCount += 6;
 }
 
 local void EndRendering(void)
@@ -817,6 +1006,7 @@ local void EndRendering(void)
     }
 
     // NOTE(vak): Draw a colorful triangle
+    if (Vulkan.VertexCount)
     {
         vkCmdBindPipeline(Vulkan.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, Vulkan.Pipeline);
 
@@ -839,7 +1029,34 @@ local void EndRendering(void)
         vkCmdSetViewport(Vulkan.CommandBuffer, 0, 1, &Viewport);
         vkCmdSetScissor(Vulkan.CommandBuffer, 0, 1, &Scissor);
 
-        vkCmdDraw(Vulkan.CommandBuffer, 3, 1, 0, 0);
+        VkWriteDescriptorSet DescriptorWrites[] =
+        {
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = 0,
+                .dstBinding = 0,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .pBufferInfo = &(VkDescriptorBufferInfo)
+                {
+                    .buffer = Vulkan.VertexBuffer.Buffer,
+                    .offset = 0,
+                    .range = Vulkan.VertexBuffer.Size,
+                },
+            },
+        };
+
+        vkCmdPushDescriptorSet(
+            Vulkan.CommandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            Vulkan.PipelineLayout,
+            0,
+            ArrayCount(DescriptorWrites),
+            DescriptorWrites
+        );
+
+        vkCmdDraw(Vulkan.CommandBuffer, Vulkan.VertexCount, 1, 0, 0);
     }
 
     // NOTE(vak): End rendering
