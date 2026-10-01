@@ -1,4 +1,12 @@
 
+// ==================================================================
+// NOTE(vak): Contains mathematical structures and functions
+//      + Exponential (Square, SquareRoot, InvSquareRoot)
+//      + Vectors 2D, 3D, 4D
+//      + Rectangle 2D
+//      + Matrix 4x4
+// ==================================================================
+
 #pragma once
 
 // ==================================================================
@@ -10,6 +18,10 @@ static f32 Square(f32 X)
     f32 Result = X*X;
     return (Result);
 }
+
+// TODO(vak): The x86_64 sqrtss instruction may give different
+// results than the fallback path. Investigate if this difference
+// in accuracy can negatively affect the codebase.
 
 static f32 SquareRoot(f32 X)
 {
@@ -39,13 +51,13 @@ static f32 SquareRoot(f32 X)
         f32 F32;
     } Value = {.F32 = X};
 
-    // NOTE(vak): Extract and divide exponent by 2
+    // NOTE(vak): Compute Exponent/2
 
     ssize Exponent      = (ssize)((Value.U32 >> 23) & 0xFF) - 127;
     ssize SqrtExponent  = Exponent / 2;
     f32   Multiplier    = (Exponent & 1) ? (1.4142135623730950488f) : (1.0f);
 
-    // NOTE(vak): Extract mantissa and perform four of the Newton method
+    // NOTE(vak): Extract mantissa and perform four iterations of the Newton method
 
     Value.U32 &= ~(0xFF << 23);
     Value.U32 |=  (127  << 23);
@@ -78,8 +90,58 @@ static f32 InvSquareRoot(f32 X)
     f32 Result = _mm_cvtss_f32(_mm_rsqrt_ss(_mm_set_ss(X)));
     return (Result);
 #else
-    f32 Result = 1.0f/SquareRoot(X);
-    return (Result);
+    // NOTE(vak): An IEEE754 floating point number X can be decomposed into
+    //      X = 2^Exponent * Mantissa
+    //
+    // Thus, the inverse square root of X is
+    //      1.0 / sqrt(X)   = 1.0 / sqrt(2^Exponent * Mantissa)
+    //                      = 1.0/sqrt(2^Exponent) * 1.0/sqrt(Mantissa)
+    //                      = 2^(-Exponent/2) * 1.0/sqrt(Mantissa)
+    //
+    // The exponent can simply be extraced and divided by 2. Then, the mantissa
+    // is extraced. Floating point mantissas belong in the interval [1, 2), so
+    // four iterations of the Newton method is enough to converge to a satisfactory
+    // result.
+
+    // Note that odd exponents are multiplied by an additional 1.0/sqrt(2), which is 2^0.5
+    // to obtain the correct result.
+
+    union
+    {
+        u32 U32;
+        f32 F32;
+    } Value = {.F32 = X};
+
+    // NOTE(vak): Compute -Exponent/2
+
+    ssize Exponent          = (ssize)((Value.U32 >> 23) & 0xFF) - 127;
+    ssize InvSqrtExponent   = -Exponent / 2;
+    f32   Multiplier        = (Exponent & 1) ? (0.7071067811865475244) : (1.0f);
+
+    // NOTE(vak): Extract mantissa and perform four iterations of the Newton method
+
+    Value.U32 &= ~(0xFF << 23);
+    Value.U32 |=  (127  << 23);
+
+    f32 InvSqrtMantissa = Value.F32;
+
+    InvSqrtMantissa = 0.5f * (InvSqrtMantissa + 1.0f/(Value.F32 * InvSqrtMantissa));
+    InvSqrtMantissa = 0.5f * (InvSqrtMantissa + 1.0f/(Value.F32 * InvSqrtMantissa));
+    InvSqrtMantissa = 0.5f * (InvSqrtMantissa + 1.0f/(Value.F32 * InvSqrtMantissa));
+    InvSqrtMantissa = 0.5f * (InvSqrtMantissa + 1.0f/(Value.F32 * InvSqrtMantissa));
+
+    // NOTE(vak): Construct result from SqrtExponent and SqrtMantissa
+
+    union
+    {
+        u32 U32;
+        f32 F32;
+    } Result = {0};
+
+    Result.U32 |= ((InvSqrtExponent + 127) << 23);
+    Result.F32 *= InvSqrtMantissa * Multiplier;
+
+    return (Result.F32);
 #endif
 }
 
