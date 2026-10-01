@@ -49,6 +49,9 @@ typedef struct
     struct wl_pointer*      Pointer;
     struct wl_keyboard*     Keyboard;
 
+    // TODO(vak): Figure out a better way to do this...
+    // Maybe buffer up events and then wait for frame() ???
+
     u32                     LastPointerMotionTime;
 } wayland_state;
 
@@ -250,7 +253,7 @@ local void WaylandPointerButtonEvent(
     struct wl_pointer*  Pointer,
     u32                 Serial,
     u32                 Time,
-    u32                 Button,
+    u32                 EvdevButtonCode,
     u32                 State
 )
 {
@@ -258,8 +261,27 @@ local void WaylandPointerButtonEvent(
     Unused(Pointer);
     Unused(Serial);
     Unused(Time);
-    Unused(Button);
-    Unused(State);
+
+    b32 IsDown = (State == WL_POINTER_BUTTON_STATE_PRESSED);
+
+    input_button Button = InputButton_Nil;
+
+    switch (EvdevButtonCode)
+    {
+        default: Button = InputButton_Nil; break;
+
+        // NOTE(vak): Values taken from linux/input-event-codes.h
+        //      BTN_LEFT    = 0x110
+        //      BTN_RIGHT   = 0x111
+        //      BTN_MIDDLE  = 0x112
+
+        case 0x110: Button = InputButton_MouseLeft;      break;
+        case 0x111: Button = InputButton_MouseRight;     break;
+        case 0x112: Button = InputButton_MouseMiddle;    break;
+    }
+
+    if (Button != InputButton_Nil)
+        InputReportButton(Button, IsDown);
 }
 
 local void WaylandPointerFrameEvent(

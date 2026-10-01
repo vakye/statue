@@ -365,7 +365,7 @@ local void BitMaskSet(
         usize MaskIndex = ElementIndex / BitsPerBitMask;
 
         Masks[MaskIndex] &= ~((bit_mask)1   << BitIndex);
-        Masks[MaskIndex] |= ~((bit_mask)Bit << BitIndex);
+        Masks[MaskIndex] |=  ((bit_mask)Bit << BitIndex);
     }
 }
 
