@@ -47,6 +47,11 @@ local PFN_vkEnumerateInstanceVersion    vkEnumerateInstanceVersion = 0;
     \
     X(vkCreateSemaphore) \
     \
+    X(vkCreateDescriptorPool) \
+    \
+    X(vkAllocateDescriptorSets) \
+    X(vkUpdateDescriptorSets) \
+    \
     X(vkCreateShaderModule) \
     X(vkDestroyShaderModule) \
     \
@@ -54,12 +59,18 @@ local PFN_vkEnumerateInstanceVersion    vkEnumerateInstanceVersion = 0;
     X(vkCreatePipelineLayout) \
     X(vkCreateGraphicsPipelines) \
     \
+    X(vkCreateSampler) \
+    \
     X(vkAllocateMemory) \
     X(vkMapMemory) \
     \
     X(vkCreateBuffer) \
     X(vkGetBufferMemoryRequirements) \
     X(vkBindBufferMemory) \
+    \
+    X(vkCreateImage) \
+    X(vkGetImageMemoryRequirements) \
+    X(vkBindImageMemory) \
     \
     X(vkCreateImageView) \
     X(vkDestroyImageView) \
@@ -73,12 +84,14 @@ local PFN_vkEnumerateInstanceVersion    vkEnumerateInstanceVersion = 0;
     X(vkBeginCommandBuffer) \
     X(vkEndCommandBuffer) \
     \
+    X(vkCmdCopyBufferToImage) \
     X(vkCmdPipelineBarrier) \
     X(vkCmdBeginRendering) \
     X(vkCmdEndRendering) \
     X(vkCmdBindPipeline) \
     X(vkCmdSetViewport) \
     X(vkCmdSetScissor) \
+    X(vkCmdBindDescriptorSets) \
     X(vkCmdPushDescriptorSet) \
     X(vkCmdPushConstants) \
     X(vkCmdDraw) \
@@ -107,7 +120,21 @@ typedef struct
 
 typedef struct
 {
+    VkImage         Image;
+    VkDeviceMemory  Memory;
+    VkImageView     View;
+    u32             SizeX;
+    u32             SizeY;
+    VkFormat        Format;
+} vulkan_image;
+
+typedef struct
+{
+    // NOTE(vak): Allocator for vulkan renderer backend
+
     arena_id                    ArenaID;
+
+    // NOTE(vak): Objects & information
 
     u32                         VersionOfAPI;
     VkInstance                  Instance;
@@ -117,16 +144,23 @@ typedef struct
     VkDevice                    Device;
     VkQueue                     Queue;
     VkCommandPool               CommandPool;
-    VkCommandBuffer             CommandBuffer;
+    VkCommandBuffer             RenderCommandBuffer;
+    VkCommandBuffer             TransferCommandBuffer;
     VkSemaphore                 AcquireSemaphore;
     VkSemaphore                 SubmitSemaphore;
     VkSurfaceFormatKHR          SwapchainFormat;
     VkPresentModeKHR            PresentMode;
 
-    VkDescriptorSetLayout       SetLayout;
+    VkDescriptorPool            TexturePool;
+    VkDescriptorSetLayout       BufferSetLayout; // NOTE(vak): Set 0
+    VkDescriptorSetLayout       TextureSetLayout; // NOTE(vak): Set 1
+    VkDescriptorSet             TextureSet;
     VkPipelineLayout            PipelineLayout;
     VkPipeline                  Pipeline;
 
+    VkSampler                   NearestSampler;
+
+    vulkan_buffer               TransferBuffer;
     vulkan_buffer               VertexBuffer;
 
     VkExtent2D                  SwapchainExtent;
@@ -135,16 +169,26 @@ typedef struct
     VkImage*                    SwapchainImages;
     VkImageView*                SwapchainImageViews;
 
+    u32                         TextureCount;
+    texture_id                  WhiteTextureID;
+
+    // NOTE(vak): Per-frame state
+
     v4                          ClearColor;
     u32                         ImageIndex;
     u32                         VertexCount;
+
+    // NOTE(vak): Arrays and stuff
+
+    vulkan_image                TextureImages[MaxTextureCount];
 } vulkan_state;
 
 typedef struct
 {
-    v2 Position;
-    v2 TexCoord;
-    v4 Color;
+    v2  Position;
+    v2  TexCoord;
+    v4  Color;
+    u32 TextureIndex;
 } vulkan_vertex;
 
 typedef struct
@@ -243,6 +287,77 @@ local void VulkanCreateBuffer(
             &Buffer->Mapping
         ));
     }
+}
+
+local void VulkanCreateImage(
+    vulkan_image*       Image,
+    u32                 SizeX,
+    u32                 SizeY,
+    VkFormat            Format,
+    VkImageUsageFlags   UsageFlags
+)
+{
+    ZeroStruct(Image);
+
+    Image->SizeX = SizeX;
+    Image->SizeY = SizeY;
+    Image->Format = Format;
+
+    VkImageCreateInfo ImageInfo =
+    {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = Format,
+        .extent = {.width = SizeX, .height = SizeY, .depth = 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = UsageFlags,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+
+    VulkanCheck(vkCreateImage(Vulkan.Device, &ImageInfo, 0, &Image->Image));
+
+    VkMemoryRequirements MemoryRequirements = {0};
+    vkGetImageMemoryRequirements(Vulkan.Device, Image->Image, &MemoryRequirements);
+
+    VkMemoryAllocateInfo AllocateInfo =
+    {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = MemoryRequirements.size,
+        .memoryTypeIndex = VulkanSelectMemoryType(
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            MemoryRequirements.memoryTypeBits
+        ),
+    };
+
+    VulkanCheck(vkAllocateMemory(Vulkan.Device, &AllocateInfo, 0, &Image->Memory));
+    VulkanCheck(vkBindImageMemory(Vulkan.Device, Image->Image, Image->Memory, 0));
+
+    VkImageViewCreateInfo ImageViewInfo =
+    {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = Image->Image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = Format,
+        .components =
+        {
+            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a = VK_COMPONENT_SWIZZLE_IDENTITY,
+        },
+        .subresourceRange =
+        {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .levelCount = 1,
+            .layerCount = 1,
+        },
+    };
+
+    VulkanCheck(vkCreateImageView(Vulkan.Device, &ImageViewInfo, 0, &Image->View));
 }
 
 local void SetupRenderer(void)
@@ -521,7 +636,7 @@ local void SetupRenderer(void)
         VulkanCheck(vkCreateCommandPool(Vulkan.Device, &CommandPoolInfo, 0, &Vulkan.CommandPool));
     }
 
-    // NOTE(vak): Command buffer
+    // NOTE(vak): Command buffers
     {
         VkCommandBufferAllocateInfo AllocateInfo =
         {
@@ -531,7 +646,8 @@ local void SetupRenderer(void)
             .commandBufferCount = 1,
         };
 
-        VulkanCheck(vkAllocateCommandBuffers(Vulkan.Device, &AllocateInfo, &Vulkan.CommandBuffer));
+        VulkanCheck(vkAllocateCommandBuffers(Vulkan.Device, &AllocateInfo, &Vulkan.RenderCommandBuffer));
+        VulkanCheck(vkAllocateCommandBuffers(Vulkan.Device, &AllocateInfo, &Vulkan.TransferCommandBuffer));
     }
 
     // NOTE(vak): Semaphore
@@ -637,7 +753,24 @@ local void SetupRenderer(void)
         EndTemporaryMemory(EnumerateMemory);
     }
 
-    // NOTE(vak): Descriptor set layout
+    // NOTE(vak): Texture descriptor pool
+    {
+        VkDescriptorPoolCreateInfo TexturePoolInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = 1,
+            .poolSizeCount = 1,
+            .pPoolSizes = &(VkDescriptorPoolSize)
+            {
+                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = MaxTextureCount,
+            },
+        };
+
+        VulkanCheck(vkCreateDescriptorPool(Vulkan.Device, &TexturePoolInfo, 0, &Vulkan.TexturePool));
+    }
+
+    // NOTE(vak): Buffer descriptor set layout
     {
         VkDescriptorSetLayoutBinding Bindings[] =
         {
@@ -657,16 +790,57 @@ local void SetupRenderer(void)
             .pBindings = Bindings,
         };
 
-        VulkanCheck(vkCreateDescriptorSetLayout(Vulkan.Device, &SetLayoutInfo, 0, &Vulkan.SetLayout));
+        VulkanCheck(vkCreateDescriptorSetLayout(Vulkan.Device, &SetLayoutInfo, 0, &Vulkan.BufferSetLayout));
+    }
+
+    // NOTE(vak): Texture descriptor set layout
+    {
+        VkDescriptorSetLayoutBinding Bindings[] =
+        {
+            {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = MaxTextureCount,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            },
+        };
+
+        VkDescriptorSetLayoutCreateInfo SetLayoutInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = ArrayCount(Bindings),
+            .pBindings = Bindings,
+        };
+
+        VulkanCheck(vkCreateDescriptorSetLayout(Vulkan.Device, &SetLayoutInfo, 0, &Vulkan.TextureSetLayout));
+    }
+
+    // NOTE(vak): Texture descriptor set
+    {
+        VkDescriptorSetAllocateInfo AllocateInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .descriptorPool = Vulkan.TexturePool,
+            .descriptorSetCount = 1,
+            .pSetLayouts = &Vulkan.TextureSetLayout,
+        };
+
+        VulkanCheck(vkAllocateDescriptorSets(Vulkan.Device, &AllocateInfo, &Vulkan.TextureSet));
     }
 
     // NOTE(vak): Pipeline layout
     {
+        VkDescriptorSetLayout SetLayouts[] =
+        {
+            [0] = Vulkan.BufferSetLayout,
+            [1] = Vulkan.TextureSetLayout,
+        };
+
         VkPipelineLayoutCreateInfo PipelineLayoutInfo =
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = 1,
-            .pSetLayouts = &Vulkan.SetLayout,
+            .setLayoutCount = ArrayCount(SetLayouts),
+            .pSetLayouts = SetLayouts,
             .pushConstantRangeCount = 1,
             .pPushConstantRanges = &(VkPushConstantRange)
             {
@@ -837,6 +1011,37 @@ local void SetupRenderer(void)
         vkDestroyShaderModule(Vulkan.Device, VertexModule, 0);
     }
 
+    // NOTE(vak): Nearest sampler
+    {
+        VkSamplerCreateInfo SamplerInfo =
+        {
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .minFilter = VK_FILTER_NEAREST,
+            .magFilter = VK_FILTER_NEAREST,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+            .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        };
+
+        VulkanCheck(vkCreateSampler(Vulkan.Device, &SamplerInfo, 0, &Vulkan.NearestSampler));
+    }
+
+    // NOTE(vak): Transfer buffer
+    {
+        usize MaxSizePerTransfer = MB(4);
+
+        VulkanCreateBuffer(
+            &Vulkan.TransferBuffer,
+            MaxSizePerTransfer,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT|
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT|
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            VK_TRUE
+        );
+    }
+
     // NOTE(vak): Vertex buffer
     {
         usize MaxRectPerDraw = 16384;
@@ -852,6 +1057,271 @@ local void SetupRenderer(void)
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             VK_TRUE
         );
+    }
+
+    // NOTE(vak): White texture
+    {
+        u32 WhiteImageRGBA[2 * 2] =
+        {
+            0xFFFFFFFF, 0xFFFFFFFF,
+            0xFFFFFFFF, 0xFFFFFFFF,
+        };
+
+        Vulkan.WhiteTextureID = MakeTexture(2, 2);
+
+        UploadTexture(Vulkan.WhiteTextureID, WhiteImageRGBA);
+    }
+
+    // NOTE(vak): Initially set all texture descriptor to white texture
+    {
+        vulkan_image* Image = Vulkan.TextureImages + Vulkan.WhiteTextureID - 1;
+
+        for (u32 TextureIndex = 0; TextureIndex < MaxTextureCount; TextureIndex++)
+        {
+            VkWriteDescriptorSet DescriptorWrite =
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = Vulkan.TextureSet,
+                .dstBinding = 0,
+                .dstArrayElement = TextureIndex,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = &(VkDescriptorImageInfo)
+                {
+                    .sampler = Vulkan.NearestSampler,
+                    .imageView = Image->View,
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                },
+            };
+
+            vkUpdateDescriptorSets(
+                Vulkan.Device,
+                1, &DescriptorWrite,
+                0, 0
+            );
+        }
+    }
+}
+
+local texture_id MakeTexture(u32 SizeX, u32 SizeY)
+{
+    if (Vulkan.TextureCount == MaxTextureCount)
+        VulkanFatalError(Str("too many textures"));
+
+    texture_id TextureID = 1 + Vulkan.TextureCount++;
+    vulkan_image* Image = Vulkan.TextureImages + (TextureID - 1);
+
+    VulkanCreateImage(
+        Image,
+        SizeX, SizeY,
+        VK_FORMAT_R8G8B8A8_UNORM,
+        VK_IMAGE_USAGE_SAMPLED_BIT|
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    );
+
+    // NOTE(vak): Update descriptor
+    {
+        VkWriteDescriptorSet DescriptorWrite =
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = Vulkan.TextureSet,
+            .dstBinding = 0,
+            .dstArrayElement = TextureID - 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &(VkDescriptorImageInfo)
+            {
+                .sampler = Vulkan.NearestSampler,
+                .imageView = Image->View,
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            },
+        };
+
+        vkUpdateDescriptorSets(
+            Vulkan.Device,
+            1, &DescriptorWrite,
+            0, 0
+        );
+    }
+
+    return (TextureID);
+}
+
+local u32 GetTextureSizeX(texture_id TextureID)
+{
+    if ((TextureID == 0) || (TextureID > Vulkan.TextureCount))
+        return (0);
+    else
+        return (Vulkan.TextureImages[TextureID - 1].SizeX);
+}
+
+local u32 GetTextureSizeY(texture_id TextureID)
+{
+    if ((TextureID == 0) || (TextureID > Vulkan.TextureCount))
+        return (0);
+    else
+        return (Vulkan.TextureImages[TextureID - 1].SizeY);
+}
+
+local void UploadTexture(texture_id TextureID, void* PixelsRGBA)
+{
+    if ((TextureID == 0) || (TextureID > MaxTextureCount))
+        return;
+
+    vulkan_image* Image = Vulkan.TextureImages + (TextureID - 1);
+
+    usize SizeX = GetTextureSizeX(TextureID);
+    usize SizeY = GetTextureSizeY(TextureID);
+
+    usize BytesPerRow = SizeX * 4;
+    usize ImageBytes = BytesPerRow * SizeY;
+
+    usize RowsPerTransfer = Vulkan.TransferBuffer.Size / BytesPerRow;
+    usize BytesPerTransfer = RowsPerTransfer * BytesPerRow;
+    usize TransferCount = (SizeY + RowsPerTransfer - 1)  / RowsPerTransfer;
+
+    VkCommandBuffer CommandBuffer = Vulkan.TransferCommandBuffer;
+
+    // TODO(vak): Better synchronization
+    VulkanCheck(vkDeviceWaitIdle(Vulkan.Device));
+
+    for (usize TransferIndex = 0; TransferIndex < TransferCount; TransferIndex++)
+    {
+        usize SourceRow = TransferIndex * RowsPerTransfer;
+        void* SourceData = (u8*)PixelsRGBA + (SourceRow * BytesPerRow);
+
+        usize BytesTransferred = TransferIndex * BytesPerTransfer;
+        usize BytesRemaining = ImageBytes - BytesTransferred;
+        usize BytesToTransfer = Minimum(BytesRemaining, BytesPerTransfer);
+        usize RowsToTransfer = BytesToTransfer / BytesPerRow;
+
+        MemoryCopy(
+            Vulkan.TransferBuffer.Mapping,
+            SourceData,
+            BytesToTransfer
+        );
+
+        // NOTE(vak): Begin command buffer
+        {
+            VkCommandBufferBeginInfo BeginInfo =
+            {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            };
+
+            VulkanCheck(vkResetCommandBuffer(CommandBuffer, 0));
+            VulkanCheck(vkBeginCommandBuffer(CommandBuffer, &BeginInfo));
+        }
+
+        // NOTE(vak): Barrier for first transfer to transition image
+        // into TRANSFER_DST_OPTIMAL layout
+        if (TransferIndex == 0)
+        {
+            VkImageMemoryBarrier TransferBarrier =
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_NONE,
+                .dstAccessMask = VK_ACCESS_NONE,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image = Image->Image,
+                .subresourceRange =
+                {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .levelCount = 1,
+                    .layerCount = 1,
+                },
+            };
+
+            vkCmdPipelineBarrier(
+                CommandBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_DEPENDENCY_BY_REGION_BIT,
+                0, 0, 0, 0,
+                1, &TransferBarrier
+            );
+        }
+
+        // NOTE(vak): Issue transfer command
+        {
+            VkBufferImageCopy CopyRegion =
+            {
+                .bufferOffset = 0,
+                .bufferRowLength = 0,
+                .bufferImageHeight = 0,
+                .imageSubresource =
+                {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .mipLevel = 0,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                },
+                .imageOffset = {.x = 0, .y = SourceRow, .z = 0},
+                .imageExtent = {.width = SizeX, .height = RowsToTransfer, .depth = 1},
+            };
+
+            vkCmdCopyBufferToImage(
+                CommandBuffer,
+                Vulkan.TransferBuffer.Buffer,
+                Image->Image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &CopyRegion
+            );
+        }
+
+        // NOTE(vak): Barrier for last transfer to transition image
+        // into SHADER_READ_ONLY_OPTIMAL layout
+        if (TransferIndex + 1 == TransferCount)
+        {
+            VkImageMemoryBarrier TransferBarrier =
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_NONE,
+                .dstAccessMask = VK_ACCESS_NONE,
+                .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image = Image->Image,
+                .subresourceRange =
+                {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .levelCount = 1,
+                    .layerCount = 1,
+                },
+            };
+
+            vkCmdPipelineBarrier(
+                CommandBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_DEPENDENCY_BY_REGION_BIT,
+                0, 0, 0, 0,
+                1, &TransferBarrier
+            );
+        }
+
+        // NOTE(vak): End command buffer
+        {
+            VulkanCheck(vkEndCommandBuffer(CommandBuffer));
+        }
+
+        // NOTE(vak): Submit
+        {
+            VkSubmitInfo SubmitInfo =
+            {
+                .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                .commandBufferCount = 1,
+                .pCommandBuffers = &CommandBuffer,
+            };
+
+            VulkanCheck(vkQueueSubmit(Vulkan.Queue, 1, &SubmitInfo, 0));
+        }
+
+        // TODO(vak): Better synchronization
+        VulkanCheck(vkDeviceWaitIdle(Vulkan.Device));
     }
 }
 
@@ -993,6 +1463,14 @@ local void BeginRendering(void)
 
 local void RenderRect(rect2 Rect, v4 Color)
 {
+    RenderRectTextured(Rect, Color, R2MinMax(V2(0, 0), V2(1, 1)), Vulkan.WhiteTextureID);
+}
+
+local void RenderRectTextured(rect2 Rect, v4 Color, rect2 TextureMap, texture_id TextureID)
+{
+    if ((TextureID == 0) || (TextureID > Vulkan.TextureCount))
+        TextureID = Vulkan.WhiteTextureID;
+
     usize MaxVertexCount = Vulkan.VertexBuffer.Size / sizeof(vulkan_vertex);
 
     // TODO(vak): Support multiple draws in one frame, so we don't
@@ -1006,19 +1484,26 @@ local void RenderRect(rect2 Rect, v4 Color)
     v2 Min = Rect.Min;
     v2 Max = Rect.Max;
 
-    V[0] = (vulkan_vertex){V2(Min.X, Min.Y), V2(0.0f, 0.0f), Color};
-    V[1] = (vulkan_vertex){V2(Max.X, Min.Y), V2(1.0f, 0.0f), Color};
-    V[2] = (vulkan_vertex){V2(Max.X, Max.Y), V2(1.0f, 1.0f), Color};
+    v2 UVMin = TextureMap.Min;
+    v2 UVMax = TextureMap.Max;
 
-    V[3] = (vulkan_vertex){V2(Max.X, Max.Y), V2(1.0f, 1.0f), Color};
-    V[4] = (vulkan_vertex){V2(Min.X, Max.Y), V2(0.0f, 1.0f), Color};
-    V[5] = (vulkan_vertex){V2(Min.X, Min.Y), V2(0.0f, 0.0f), Color};
+    u32 TextureIndex = TextureID - 1;
+
+    V[0] = (vulkan_vertex){V2(Min.X, Min.Y), V2(UVMin.U, UVMin.V), Color, TextureIndex};
+    V[1] = (vulkan_vertex){V2(Max.X, Min.Y), V2(UVMax.U, UVMin.V), Color, TextureIndex};
+    V[2] = (vulkan_vertex){V2(Max.X, Max.Y), V2(UVMax.U, UVMax.V), Color, TextureIndex};
+
+    V[3] = (vulkan_vertex){V2(Max.X, Max.Y), V2(UVMax.U, UVMax.V), Color, TextureIndex};
+    V[4] = (vulkan_vertex){V2(Min.X, Max.Y), V2(UVMin.U, UVMax.V), Color, TextureIndex};
+    V[5] = (vulkan_vertex){V2(Min.X, Min.Y), V2(UVMin.U, UVMin.V), Color, TextureIndex};
 
     Vulkan.VertexCount += 6;
 }
 
 local void EndRendering(void)
 {
+    VkCommandBuffer CommandBuffer = Vulkan.RenderCommandBuffer;
+
     // NOTE(vak): Begin command buffer
     {
         VkCommandBufferBeginInfo BeginInfo =
@@ -1026,8 +1511,8 @@ local void EndRendering(void)
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         };
 
-        VulkanCheck(vkResetCommandBuffer(Vulkan.CommandBuffer, 0));
-        VulkanCheck(vkBeginCommandBuffer(Vulkan.CommandBuffer, &BeginInfo));
+        VulkanCheck(vkResetCommandBuffer(CommandBuffer, 0));
+        VulkanCheck(vkBeginCommandBuffer(CommandBuffer, &BeginInfo));
     }
 
     // NOTE(vak): Render barrier
@@ -1051,7 +1536,7 @@ local void EndRendering(void)
         };
 
         vkCmdPipelineBarrier(
-            Vulkan.CommandBuffer,
+            CommandBuffer,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             VK_DEPENDENCY_BY_REGION_BIT,
@@ -1091,13 +1576,13 @@ local void EndRendering(void)
             },
         };
 
-        vkCmdBeginRendering(Vulkan.CommandBuffer, &RenderingInfo);
+        vkCmdBeginRendering(CommandBuffer, &RenderingInfo);
     }
 
     // NOTE(vak): Dispatch draw
     if (Vulkan.VertexCount)
     {
-        vkCmdBindPipeline(Vulkan.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, Vulkan.Pipeline);
+        vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, Vulkan.Pipeline);
 
         VkViewport Viewport =
         {
@@ -1115,8 +1600,8 @@ local void EndRendering(void)
             .extent = Vulkan.SwapchainExtent,
         };
 
-        vkCmdSetViewport(Vulkan.CommandBuffer, 0, 1, &Viewport);
-        vkCmdSetScissor(Vulkan.CommandBuffer, 0, 1, &Scissor);
+        vkCmdSetViewport(CommandBuffer, 0, 1, &Viewport);
+        vkCmdSetScissor(CommandBuffer, 0, 1, &Scissor);
 
         VkWriteDescriptorSet DescriptorWrites[] =
         {
@@ -1137,12 +1622,21 @@ local void EndRendering(void)
         };
 
         vkCmdPushDescriptorSet(
-            Vulkan.CommandBuffer,
+            CommandBuffer,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
             Vulkan.PipelineLayout,
             0,
             ArrayCount(DescriptorWrites),
             DescriptorWrites
+        );
+
+        vkCmdBindDescriptorSets(
+            CommandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            Vulkan.PipelineLayout,
+            1,
+            1, &Vulkan.TextureSet,
+            0, 0
         );
 
         vulkan_push_constants PushConstants =
@@ -1154,7 +1648,7 @@ local void EndRendering(void)
         };
 
         vkCmdPushConstants(
-            Vulkan.CommandBuffer,
+            CommandBuffer,
             Vulkan.PipelineLayout,
             VK_SHADER_STAGE_VERTEX_BIT,
             0,
@@ -1162,12 +1656,12 @@ local void EndRendering(void)
             &PushConstants
         );
 
-        vkCmdDraw(Vulkan.CommandBuffer, Vulkan.VertexCount, 1, 0, 0);
+        vkCmdDraw(CommandBuffer, Vulkan.VertexCount, 1, 0, 0);
     }
 
     // NOTE(vak): End rendering
     {
-        vkCmdEndRendering(Vulkan.CommandBuffer);
+        vkCmdEndRendering(CommandBuffer);
     }
 
     // NOTE(vak): Present barrier
@@ -1191,7 +1685,7 @@ local void EndRendering(void)
         };
 
         vkCmdPipelineBarrier(
-            Vulkan.CommandBuffer,
+            CommandBuffer,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             VK_DEPENDENCY_BY_REGION_BIT,
@@ -1202,7 +1696,7 @@ local void EndRendering(void)
 
     // NOTE(vak): End command buffer
     {
-        VulkanCheck(vkEndCommandBuffer(Vulkan.CommandBuffer));
+        VulkanCheck(vkEndCommandBuffer(CommandBuffer));
     }
 
     // NOTE(vak): Submit
@@ -1216,7 +1710,7 @@ local void EndRendering(void)
             .pWaitSemaphores = &Vulkan.AcquireSemaphore,
             .pWaitDstStageMask = &WaitStageMask,
             .commandBufferCount = 1,
-            .pCommandBuffers = &Vulkan.CommandBuffer,
+            .pCommandBuffers = &CommandBuffer,
             .signalSemaphoreCount = 1,
             .pSignalSemaphores = &Vulkan.SubmitSemaphore,
         };

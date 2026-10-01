@@ -151,6 +151,18 @@ local void Main(void)
 
     arena_id PermanentArenaID = MakeArena(KB(64), GB(64));
 
+    u32 CheckerboardImageRGBA[4 * 4] =
+    {
+        0xFFFFFFFF, 0x80000000, 0xFFFFFFFF, 0x80000000,
+        0x80000000, 0xFFFFFFFF, 0x80000000, 0xFFFFFFFF,
+        0xFFFFFFFF, 0x80000000, 0xFFFFFFFF, 0x80000000,
+        0x80000000, 0xFFFFFFFF, 0x80000000, 0xFFFFFFFF,
+    };
+
+    texture_id CheckerboardTextureID = MakeTexture(4, 4);
+
+    UploadTexture(CheckerboardTextureID, CheckerboardImageRGBA);
+
     // NOTE(vak): 16x16 Tilemap
 
     string SmileyTileMapString = Str(
@@ -214,9 +226,11 @@ local void Main(void)
             {
                 rect2 TileRect = GetTileRect(&TileMap, MouseTouchingTileID);
 
-                RenderRect(
+                RenderRectTextured(
                     TileRect,
-                    V4(1.0f, 1.0f, 1.0f, 0.5f)
+                    V4(1.0f, 1.0f, 1.0f, 0.5f),
+                    R2MinMax(V2(0, 0), V2(1, 1)),
+                    CheckerboardTextureID
                 );
             }
 
