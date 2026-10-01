@@ -9,6 +9,11 @@
 // NOTE(vak): Interface
 // ==================================================================
 
+// NOTE(vak): All coordinates are window coordinates:
+//      + Origin (0, 0) is located at the top-left
+//      + Positive X goes right.
+//      + Positive Y goes down.
+
 local void SetupRenderer    (void);
 local void SetClearColor    (v4 Color);
 local void BeginRendering   (void);

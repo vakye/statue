@@ -13,6 +13,11 @@ layout(binding = 0) readonly buffer VertexBuffer
     vertex Vertices[];
 };
 
+layout(push_constant) uniform PushConstants
+{
+    mat4 Projection;
+};
+
 layout(location = 0) out VertexShaderOutput
 {
     vec2 TexCoord;
@@ -27,7 +32,7 @@ void main()
     vec2 TexCoord = vec2(Vertex.U, Vertex.V);
     vec4 Color = vec4(Vertex.R, Vertex.G, Vertex.B, Vertex.A);
 
-    gl_Position = vec4(Position, 0.0, 1.0);
+    gl_Position = Projection * vec4(Position, 0.0, 1.0);
     Out.TexCoord = TexCoord;
     Out.Color = Color;
 }

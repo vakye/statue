@@ -80,6 +80,7 @@ local PFN_vkEnumerateInstanceVersion    vkEnumerateInstanceVersion = 0;
     X(vkCmdSetViewport) \
     X(vkCmdSetScissor) \
     X(vkCmdPushDescriptorSet) \
+    X(vkCmdPushConstants) \
     X(vkCmdDraw) \
     \
     X(vkQueueSubmit) \
@@ -145,6 +146,11 @@ typedef struct
     v2 TexCoord;
     v4 Color;
 } vulkan_vertex;
+
+typedef struct
+{
+    m4x4 Projection;
+} vulkan_push_constants;
 
 local vulkan_state Vulkan = {0};
 
@@ -661,6 +667,13 @@ local void SetupRenderer(void)
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .setLayoutCount = 1,
             .pSetLayouts = &Vulkan.SetLayout,
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &(VkPushConstantRange)
+            {
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                .offset = 0,
+                .size = sizeof(vulkan_push_constants),
+            },
         };
 
         VulkanCheck(vkCreatePipelineLayout(Vulkan.Device, &PipelineLayoutInfo, 0, &Vulkan.PipelineLayout));
@@ -1089,9 +1102,9 @@ local void EndRendering(void)
         VkViewport Viewport =
         {
             .x = 0.0f,
-            .y = (f32)Vulkan.SwapchainExtent.height,
+            .y = 0.0f,
             .width = (f32)Vulkan.SwapchainExtent.width,
-            .height = -(f32)Vulkan.SwapchainExtent.height,
+            .height = (f32)Vulkan.SwapchainExtent.height,
             .minDepth = 0.0f,
             .maxDepth = 1.0f,
         };
@@ -1130,6 +1143,23 @@ local void EndRendering(void)
             0,
             ArrayCount(DescriptorWrites),
             DescriptorWrites
+        );
+
+        vulkan_push_constants PushConstants =
+        {
+            .Projection = M4x4Orthographic2D(R2MinMax(
+                V2(0.0f, 0.0f),
+                V2(Viewport.width, Viewport.height)
+            )),
+        };
+
+        vkCmdPushConstants(
+            Vulkan.CommandBuffer,
+            Vulkan.PipelineLayout,
+            VK_SHADER_STAGE_VERTEX_BIT,
+            0,
+            sizeof(PushConstants),
+            &PushConstants
         );
 
         vkCmdDraw(Vulkan.CommandBuffer, Vulkan.VertexCount, 1, 0, 0);
