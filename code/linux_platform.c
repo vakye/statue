@@ -37,6 +37,11 @@ local void SetupWindow(void)
     WaylandSetupWindow();
 }
 
+local void ToggleFullscreen(void)
+{
+    WaylandToggleFullscreen();
+}
+
 local u32 GetWindowSizeX(void)
 {
     return WaylandGetWindowSizeX();

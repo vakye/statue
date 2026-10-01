@@ -10,6 +10,7 @@
 // ==================================================================
 
 local void WaylandSetupWindow       (void);
+local void WaylandToggleFullscreen  (void);
 local u32  WaylandGetWindowSizeX    (void);
 local u32  WaylandGetWindowSizeY    (void);
 local b32  WaylandIsWindowClosed    (void);
@@ -35,6 +36,7 @@ typedef struct
     u32 SizeX;
     u32 SizeY;
 
+    b32 IsFullscreen;
     b32 HasClosed;
 
     struct wl_display*      Display;
@@ -499,6 +501,16 @@ local void WaylandSetupWindow(void)
     wl_surface_commit(Wayland.Surface);
     wl_display_roundtrip(Wayland.Display);
     wl_surface_commit(Wayland.Surface);
+}
+
+local void WaylandToggleFullscreen(void)
+{
+    if (!Wayland.IsFullscreen)
+        xdg_toplevel_set_fullscreen(Wayland.XdgTopLevel, 0);
+    else
+        xdg_toplevel_unset_fullscreen(Wayland.XdgTopLevel);
+
+    Wayland.IsFullscreen = !Wayland.IsFullscreen;
 }
 
 local u32 WaylandGetWindowSizeX(void)

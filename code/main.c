@@ -69,16 +69,19 @@ local v2 GetTileMapSize(tile_map* TileMap)
 
 local tile_id GetTouchedTileID(tile_map* TileMap, v2 Position)
 {
-
     v2 Coordinate = V2Div(V2Sub(Position, TileMap->Position), TileMap->TileSize);
 
-    ssize SnappedX = (ssize)Coordinate.X;
-    ssize SnappedY = (ssize)Coordinate.Y;
-
-    if ((SnappedX < 0) || (SnappedX >= TileMap->TileCountX))
+    if (Coordinate.X < 0.0f)
+        return (0);
+    if (Coordinate.Y < 0.0f)
         return (0);
 
-    if ((SnappedY < 0) || (SnappedY >= TileMap->TileCountY))
+    ssize SnappedX = (ssize)(Coordinate.X);
+    ssize SnappedY = (ssize)(Coordinate.Y);
+
+    if (SnappedX >= TileMap->TileCountX)
+        return (0);
+    if (SnappedY >= TileMap->TileCountY)
         return (0);
 
     ssize TileIndex = SnappedY * (ssize)TileMap->TileCountX + SnappedX;
@@ -144,10 +147,58 @@ local void DrawTileMap(tile_map* TileMap)
     }
 }
 
+local void DrawRectOutline(rect2 Rect, f32 Thickness, v4 Color)
+{
+    v2 Min = Rect.Min;
+    v2 Max = Rect.Max;
+
+    // NOTE(vak): Left
+
+    RenderRect(
+        R2MinMax(
+            V2(Min.X - Thickness, Min.Y - Thickness),
+            V2(Min.X + Thickness, Max.Y + Thickness)
+        ),
+        Color
+    );
+
+    // NOTE(vak): Right
+
+    RenderRect(
+        R2MinMax(
+            V2(Max.X - Thickness, Min.Y - Thickness),
+            V2(Max.X + Thickness, Max.Y + Thickness)
+        ),
+        Color
+    );
+
+    // NOTE(vak): Top
+
+    RenderRect(
+        R2MinMax(
+            V2(Min.X + Thickness, Min.Y - Thickness),
+            V2(Max.X - Thickness, Min.Y + Thickness)
+        ),
+        Color
+    );
+
+    // NOTE(vak): Bottom
+
+    RenderRect(
+        R2MinMax(
+            V2(Min.X + Thickness, Max.Y - Thickness),
+            V2(Max.X - Thickness, Max.Y + Thickness)
+        ),
+        Color
+    );
+}
+
 local void Main(void)
 {
     SetupWindow();
     SetupRenderer();
+
+    ToggleFullscreen();
 
     arena_id PermanentArenaID = MakeArena(KB(64), GB(64));
 
@@ -163,31 +214,47 @@ local void Main(void)
 
     UploadTexture(CheckerboardTextureID, CheckerboardImageRGBA);
 
-    // NOTE(vak): 16x16 Tilemap
+    // NOTE(vak): 48x32 Tilemap
 
     string SmileyTileMapString = Str(
-        "################"
-        "#..............#"
-        "#.###......###.#"
-        "#.###......###.#"
-        "#.###......###.#"
-        "#..............#"
-        "#..............#"
-        "#..............#"
-        "#..............#"
-        "#..#........#..#"
-        "#...##....##...#"
-        "#.....####.....#"
-        "#..............#"
-        "#..............#"
-        "#..............#"
-        "################"
+        "................................................"
+        "................................................"
+        "................................................"
+        "................................................"
+        "................................................"
+        "................................................"
+        "................................................"
+        "................................................"
+        "................################................"
+        "................#..............#................"
+        "................#.###......###.#................"
+        "................#.###......###.#................"
+        "................#.###......###.#................"
+        "................#..............#................"
+        "................#..............#................"
+        "................#..............#................"
+        "................#..............#................"
+        "................#..#........#..#................"
+        "................#...##....##...#................"
+        "................#.....####.....#................"
+        "................#..............#................"
+        "................#..............#................"
+        "................#..............#................"
+        "................################................"
+        "................................................"
+        "................................................"
+        "................................................"
+        "................................................"
+        "................................................"
+        "................................................"
+        "................................................"
+        "................................................"
     );
 
     tile_map TileMap = LoadTileMap(
         PermanentArenaID,
         SmileyTileMapString,
-        16, 16
+        48, 32
     );
 
     SetTileSize(&TileMap, V2(32.0f, 32.0f));
@@ -220,6 +287,12 @@ local void Main(void)
             SetClearColor(V4(0.07f, 0.08f, 0.1f, 1.0f));
             BeginRendering();
 
+            DrawRectOutline(
+                R2MinSize(TileMapP, TileMapSize),
+                4.0f,
+                V4(0.8f, 0.6f, 0.3f, 0.8f)
+            );
+
             DrawTileMap(&TileMap);
 
             if (MouseTouchingTileID)
@@ -231,6 +304,12 @@ local void Main(void)
                     V4(1.0f, 1.0f, 1.0f, 0.5f),
                     R2MinMax(V2(0, 0), V2(1, 1)),
                     CheckerboardTextureID
+                );
+
+                DrawRectOutline(
+                    TileRect,
+                    2.0f,
+                    V4(0.3f, 0.6f, 0.9f, 0.9f)
                 );
             }
 

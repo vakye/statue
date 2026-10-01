@@ -1176,6 +1176,9 @@ local void UploadTexture(texture_id TextureID, void* PixelsRGBA)
     usize BytesPerRow = SizeX * 4;
     usize ImageBytes = BytesPerRow * SizeY;
 
+    if (Vulkan.TransferBuffer.Size < BytesPerRow)
+        VulkanFatalError(Str("transfer buffer not large enough to contain one row of image"));
+
     usize RowsPerTransfer = Vulkan.TransferBuffer.Size / BytesPerRow;
     usize BytesPerTransfer = RowsPerTransfer * BytesPerRow;
     usize TransferCount = (SizeY + RowsPerTransfer - 1)  / RowsPerTransfer;

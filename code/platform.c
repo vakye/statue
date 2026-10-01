@@ -10,6 +10,7 @@
 // ==================================================================
 
 local void      SetupWindow         (void);
+local void      ToggleFullscreen    (void);
 local u32       GetWindowSizeX      (void);
 local u32       GetWindowSizeY      (void);
 local b32       IsWindowClosed      (void);
