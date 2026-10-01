@@ -327,6 +327,18 @@ static b32 R2Intersects(rect2 A, rect2 B)
     return (Result);
 }
 
+static b32 R2ContainsPoint(rect2 A, v2 B)
+{
+    b32 IsOutside =
+        (B.X < A.Min.X) ||
+        (B.Y < A.Min.Y) ||
+        (B.X > A.Max.X) ||
+        (B.Y > A.Max.Y);
+
+    b32 Result = !IsOutside;
+    return (Result);
+}
+
 // ==================================================================
 // NOTE(vak): 4x4 matrix
 // ==================================================================

@@ -11,6 +11,7 @@
 //      + Constants
 //      + Memory zero, fill, copy, ...
 //      + UTF-8 string
+//      + Bit masks
 // ==================================================================
 
 #pragma once
@@ -317,5 +318,54 @@ local b32 StringStartsWith(string String, string Match)
     }
 
     return (Result);
+}
+
+// ==================================================================
+// NOTE(vak): Bit masks
+// ==================================================================
+
+typedef usize bit_mask;
+
+#define BitsPerBitMask (sizeof(bit_mask) * 8)
+
+#define GetBitMaskCount(ElementCount) (((ElementCount) + BitsPerBitMask) / BitsPerBitMask)
+
+local void ZeroBitMasks(bit_mask* Masks, usize ElementCount)
+{
+    ZeroArray(Masks, GetBitMaskCount(ElementCount));
+}
+
+local usize BitMaskGet(
+    bit_mask* Masks,
+    usize ElementCount,
+    usize ElementIndex)
+{
+    usize Bit = 0;
+
+    if (ElementIndex < ElementCount)
+    {
+        usize BitIndex  = ElementIndex % BitsPerBitMask;
+        usize MaskIndex = ElementIndex / BitsPerBitMask;
+
+        Bit = (Masks[MaskIndex] >> BitIndex) & 1;
+    }
+
+    return (Bit);
+}
+
+local void BitMaskSet(
+    bit_mask* Masks,
+    usize ElementCount,
+    usize ElementIndex,
+    usize Bit)
+{
+    if (ElementIndex < ElementCount)
+    {
+        usize BitIndex  = ElementIndex % BitsPerBitMask;
+        usize MaskIndex = ElementIndex / BitsPerBitMask;
+
+        Masks[MaskIndex] &= ~((bit_mask)1   << BitIndex);
+        Masks[MaskIndex] |= ~((bit_mask)Bit << BitIndex);
+    }
 }
 

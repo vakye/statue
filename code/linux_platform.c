@@ -54,6 +54,7 @@ local b32 IsWindowClosed(void)
 
 local void PollEvents(void)
 {
+    InputPrepareForFrame();
     WaylandPollEvents();
 }
 

@@ -3,6 +3,7 @@
 #include "math.c"
 #include "platform.c"
 #include "print.c"
+#include "input.c"
 #include "memory.c"
 #include "render.c"
 #include "main.c"

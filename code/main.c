@@ -64,6 +64,8 @@ local void Main(void)
 
         v2 TileMapP = V2ScalarMul(0.5f, V2Sub(WindowSize, TileMapSize));
 
+        v2 MouseP = InputGetMouseP();
+
         for (u32 TileY = 0; TileY < TileCountY; TileY++)
         {
             for (u32 TileX = 0; TileX < TileCountX; TileX++)
@@ -75,11 +77,18 @@ local void Main(void)
                 v2 Min = V2Add(TileMapP, V2Mul(TileCoordinate, TileSize));
                 v2 Max = V2Add(Min, TileSize);
 
+                rect2 TileRect = R2MinMax(Min, Max);
+
+                f32 Brightness = 0.8f;
+
+                if (R2ContainsPoint(TileRect, MouseP))
+                    Brightness = 0.9f;
+
                 if (TileValue)
                 {
                     RenderRect(
-                        R2MinMax(Min, Max),
-                        V4(1.0f, 1.0f, 1.0f, 1.0f)
+                        TileRect,
+                        V4(Brightness, Brightness, Brightness, 1.0f)
                     );
                 }
             }

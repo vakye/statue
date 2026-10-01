@@ -44,6 +44,12 @@ typedef struct
     struct wl_surface*      Surface;
     struct xdg_surface*     XdgSurface;
     struct xdg_toplevel*    XdgTopLevel;
+
+    struct wl_seat*         Seat;
+    struct wl_pointer*      Pointer;
+    struct wl_keyboard*     Keyboard;
+
+    u32                     LastPointerMotionTime;
 } wayland_state;
 
 local wayland_state Wayland = {0};
@@ -71,14 +77,23 @@ local void WaylandRegistryGlobalEvent(
     if (StringEquals(Interface, CString(wl_compositor_interface.name)))
     {
         Wayland.Compositor = wl_registry_bind(Wayland.Registry, Name, &wl_compositor_interface, Version);
+
         if (!Wayland.Compositor)
             WaylandFatalError(Str("failed to bind wl_compositor"));
     }
     else if (StringEquals(Interface, CString(xdg_wm_base_interface.name)))
     {
         Wayland.XdgWmBase = wl_registry_bind(Wayland.Registry, Name, &xdg_wm_base_interface, Version);
+
         if (!Wayland.XdgWmBase)
             WaylandFatalError(Str("failed to bind xdg_wm_base"));
+    }
+    else if (StringEquals(Interface, CString(wl_seat_interface.name)))
+    {
+        Wayland.Seat = wl_registry_bind(Wayland.Registry, Name, &wl_seat_interface, Version);
+
+        if (!Wayland.Seat)
+            WaylandFatalError(Str("failed to bind wl_seat"));
     }
 }
 
@@ -169,6 +184,141 @@ local struct xdg_toplevel_listener WaylandXdgTopLevelListener =
     .wm_capabilities    = WaylandXdgTopLevelWmCapabilitiesEvent,
 };
 
+local void WaylandPointerEnterEvent(
+    void*               Data,
+    struct wl_pointer*  Pointer,
+    u32                 Serial,
+    struct wl_surface*  Surface,
+    wl_fixed_t          SurfaceX,
+    wl_fixed_t          SurfaceY
+)
+{
+    Unused(Data);
+    Unused(Pointer);
+    Unused(Serial);
+
+    if (Surface != Wayland.Surface)
+        return;
+
+    v2 MouseP = V2(
+        (f32) wl_fixed_to_double(SurfaceX),
+        (f32) wl_fixed_to_double(SurfaceY)
+    );
+
+    InputReportMouseP(MouseP);
+}
+
+local void WaylandPointerLeaveEvent(
+    void*               Data,
+    struct wl_pointer*  Pointer,
+    u32                 Serial,
+    struct wl_surface*  Surface
+)
+{
+    Unused(Data);
+    Unused(Pointer);
+    Unused(Serial);
+    Unused(Surface);
+}
+
+local void WaylandPointerMotionEvent(
+    void*               Data,
+    struct wl_pointer*  Pointer,
+    u32                 Time,
+    wl_fixed_t          SurfaceX,
+    wl_fixed_t          SurfaceY
+)
+{
+    Unused(Data);
+    Unused(Pointer);
+
+    if (Time > Wayland.LastPointerMotionTime)
+    {
+        v2 MouseP = V2(
+            (f32) wl_fixed_to_double(SurfaceX),
+            (f32) wl_fixed_to_double(SurfaceY)
+        );
+
+        InputReportMouseP(MouseP);
+
+        Wayland.LastPointerMotionTime = Time;
+    }
+}
+
+local void WaylandPointerButtonEvent(
+    void*               Data,
+    struct wl_pointer*  Pointer,
+    u32                 Serial,
+    u32                 Time,
+    u32                 Button,
+    u32                 State
+)
+{
+    Unused(Data);
+    Unused(Pointer);
+    Unused(Serial);
+    Unused(Time);
+    Unused(Button);
+    Unused(State);
+}
+
+local void WaylandPointerFrameEvent(
+    void*               Data,
+    struct wl_pointer*  Pointer
+)
+{
+    Unused(Data);
+    Unused(Pointer);
+}
+
+local struct wl_pointer_listener WaylandPointerListener =
+{
+    .enter  = WaylandPointerEnterEvent,
+    .leave  = WaylandPointerLeaveEvent,
+    .motion = WaylandPointerMotionEvent,
+    .button = WaylandPointerButtonEvent,
+    .frame  = WaylandPointerFrameEvent,
+};
+
+local void WaylandSeatCapabilitiesEvent(
+    void*           Data,
+    struct wl_seat* Seat,
+    u32             Capabilities
+)
+{
+    Unused(Data);
+    Unused(Seat);
+
+    if (Wayland.Pointer) wl_pointer_release(Wayland.Pointer);
+    if (Wayland.Keyboard) wl_keyboard_release(Wayland.Keyboard);
+
+    if (Capabilities & WL_SEAT_CAPABILITY_POINTER)
+        Wayland.Pointer = wl_seat_get_pointer(Wayland.Seat);
+
+    if (Capabilities & WL_SEAT_CAPABILITY_KEYBOARD)
+        Wayland.Keyboard = wl_seat_get_keyboard(Wayland.Seat);
+
+    if (Wayland.Pointer)
+        wl_pointer_add_listener(Wayland.Pointer, &WaylandPointerListener, 0);
+}
+
+local void WaylandSeatNameEvent(
+    void*           Data,
+    struct wl_seat* Seat,
+    const char*     Name
+)
+{
+    Unused(Data);
+    Unused(Seat);
+    Unused(Name);
+}
+
+local struct wl_seat_listener WaylandSeatListener =
+{
+    .capabilities   = WaylandSeatCapabilitiesEvent,
+    .name           = WaylandSeatNameEvent,
+};
+
 local void WaylandSetupWindow(void)
 {
     Wayland.Display = wl_display_connect(0);
@@ -189,6 +339,9 @@ local void WaylandSetupWindow(void)
         WaylandFatalError(Str("no xdg_wm_base"));
 
     xdg_wm_base_add_listener(Wayland.XdgWmBase, &WaylandXdgWmBaseListener, 0);
+
+    if (Wayland.Seat)
+        wl_seat_add_listener(Wayland.Seat, &WaylandSeatListener, 0);
 
     Wayland.Surface = wl_compositor_create_surface(Wayland.Compositor);
     if (!Wayland.Surface)
