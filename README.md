@@ -12,5 +12,5 @@ WIP Roguelike, Shoot-Em-Up, Defense Game
 
 ![Rooms](images/devprog0_rooms.png)
 ![Smiley](images/devprog0_smiley.png)
-![Hello](images/devprof0_hello.png)
+![Hello](images/devprog0_hello.png)
 
