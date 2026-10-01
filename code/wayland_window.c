@@ -169,6 +169,19 @@ local void WaylandXdgTopLevelCloseEvent(
     Wayland.HasClosed = true;
 }
 
+local void WaylandXdgTopLevelConfigureBoundsEvent(
+    void*                   Data,
+    struct xdg_toplevel*    XdgTopLevel,
+    s32                     Width,
+    s32                     Height
+)
+{
+    Unused(Data);
+    Unused(XdgTopLevel);
+    Unused(Width);
+    Unused(Height);
+}
+
 local void WaylandXdgTopLevelWmCapabilitiesEvent(
     void*                   Data,
     struct xdg_toplevel*    XdgTopLevel,
@@ -184,6 +197,7 @@ local struct xdg_toplevel_listener WaylandXdgTopLevelListener =
 {
     .configure          = WaylandXdgTopLevelConfigureEvent,
     .close              = WaylandXdgTopLevelCloseEvent,
+    .configure_bounds   = WaylandXdgTopLevelConfigureBoundsEvent,
     .wm_capabilities    = WaylandXdgTopLevelWmCapabilitiesEvent,
 };
 
@@ -293,13 +307,111 @@ local void WaylandPointerFrameEvent(
     Unused(Pointer);
 }
 
+local void WaylandPointerAxisEvent(
+    void*               Data,
+    struct wl_pointer*  Pointer,
+    u32                 Time,
+    u32                 Axis,
+    wl_fixed_t          Value
+)
+{
+    Unused(Data);
+    Unused(Pointer);
+    Unused(Time);
+    Unused(Axis);
+    Unused(Value);
+}
+
+local void WaylandPointerAxisSourceEvent(
+    void*               Data,
+    struct wl_pointer*  Pointer,
+    u32                 AxisSource
+)
+{
+    Unused(Data);
+    Unused(Pointer);
+    Unused(AxisSource);
+}
+
+local void WaylandPointerAxisStopEvent(
+    void*               Data,
+    struct wl_pointer*  Pointer,
+    u32                 Time,
+    u32                 Axis
+)
+{
+    Unused(Data);
+    Unused(Pointer);
+    Unused(Time);
+    Unused(Axis);
+}
+
+local void WaylandPointerAxisDiscreteEvent(
+    void*               Data,
+    struct wl_pointer*  Pointer,
+    u32                 Axis,
+    s32                 Discrete
+)
+{
+    Unused(Data);
+    Unused(Pointer);
+    Unused(Axis);
+    Unused(Discrete);
+}
+
+local void WaylandPointerAxisValue120Event(
+    void*               Data,
+    struct wl_pointer*  Pointer,
+    u32                 Axis,
+    s32                 Value120
+)
+{
+    Unused(Data);
+    Unused(Pointer);
+    Unused(Axis);
+    Unused(Value120);
+}
+
+local void WaylandPointerAxisRelativeDirectionEvent(
+    void*               Data,
+    struct wl_pointer*  Pointer,
+    u32                 Axis,
+    u32                 Direction
+)
+{
+    Unused(Data);
+    Unused(Pointer);
+    Unused(Axis);
+    Unused(Direction);
+}
+
+local void WaylandPointerWarpEvent(
+    void*               Data,
+    struct wl_pointer*  Pointer,
+    wl_fixed_t          SurfaceX,
+    wl_fixed_t          SurfaceY
+)
+{
+    Unused(Data);
+    Unused(Pointer);
+    Unused(SurfaceX);
+    Unused(SurfaceY);
+}
+
 local struct wl_pointer_listener WaylandPointerListener =
 {
-    .enter  = WaylandPointerEnterEvent,
-    .leave  = WaylandPointerLeaveEvent,
-    .motion = WaylandPointerMotionEvent,
-    .button = WaylandPointerButtonEvent,
-    .frame  = WaylandPointerFrameEvent,
+    .enter                      = WaylandPointerEnterEvent,
+    .leave                      = WaylandPointerLeaveEvent,
+    .motion                     = WaylandPointerMotionEvent,
+    .button                     = WaylandPointerButtonEvent,
+    .frame                      = WaylandPointerFrameEvent,
+    .axis                       = WaylandPointerAxisEvent,
+    .axis_source                = WaylandPointerAxisSourceEvent,
+    .axis_stop                  = WaylandPointerAxisStopEvent,
+    .axis_discrete              = WaylandPointerAxisDiscreteEvent,
+    .axis_value120              = WaylandPointerAxisValue120Event,
+    .axis_relative_direction    = WaylandPointerAxisRelativeDirectionEvent,
+    .warp                       = WaylandPointerWarpEvent,
 };
 
 local void WaylandSeatCapabilitiesEvent(
