@@ -23,6 +23,7 @@ local void WaylandPresentWindow     (void);
 
 #include <wayland-client.h>
 #include "wayland_xdg.c"
+#include <xkbcommon/xkbcommon.h>
 
 typedef struct
 {
@@ -50,6 +51,10 @@ typedef struct
     struct wl_seat*         Seat;
     struct wl_pointer*      Pointer;
     struct wl_keyboard*     Keyboard;
+
+    struct xkb_context*     XkbContext;
+    struct xkb_keymap*      XkbKeymap;
+    struct xkb_state*       XkbState;
 
     // TODO(vak): Figure out a better way to do this...
     // Maybe buffer up events and then wait for frame() ???
@@ -416,6 +421,155 @@ local struct wl_pointer_listener WaylandPointerListener =
     .warp                       = WaylandPointerWarpEvent,
 };
 
+local void WaylandKeyboardKeymapEvent(
+    void*               Data,
+    struct wl_keyboard* Keyboard,
+    u32                 Format,
+    s32                 FileDescriptor,
+    u32                 Size
+)
+{
+    Unused(Data);
+    Unused(Keyboard);
+
+    if (Format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1)
+        WaylandFatalError(Str("only xkb v1 keymap is supported right now"));
+
+    void* KeymapString = mmap(0, Size, PROT_READ, MAP_PRIVATE, FileDescriptor, 0);
+    if (!KeymapString)
+        WaylandFatalError(Str("failed to map keymap string"));
+
+    Wayland.XkbContext = xkb_context_new(0);
+    if (!Wayland.XkbContext)
+        WaylandFatalError(Str("failed to create xkb context"));
+
+    Wayland.XkbKeymap = xkb_keymap_new_from_string(
+        Wayland.XkbContext,
+        KeymapString,
+        XKB_KEYMAP_FORMAT_TEXT_V1,
+        XKB_KEYMAP_COMPILE_NO_FLAGS
+    );
+
+    if (!Wayland.XkbKeymap)
+        WaylandFatalError(Str("failed to create xkb keymap"));
+
+    Wayland.XkbState = xkb_state_new(Wayland.XkbKeymap);
+    if (!Wayland.XkbState)
+        WaylandFatalError(Str("failed to create xkb state"));
+}
+
+local void WaylandKeyboardEnterEvent(
+    void*               Data,
+    struct wl_keyboard* Keyboard,
+    u32                 Serial,
+    struct wl_surface*  Surface,
+    struct wl_array*    Keys
+)
+{
+    Unused(Data);
+    Unused(Keyboard);
+    Unused(Serial);
+    Unused(Surface);
+    Unused(Keys);
+}
+
+local void WaylandKeyboardLeaveEvent(
+    void*               Data,
+    struct wl_keyboard* Keyboard,
+    u32                 Serial,
+    struct wl_surface*  Surface
+)
+{
+    Unused(Data);
+    Unused(Keyboard);
+    Unused(Serial);
+    Unused(Surface);
+}
+
+local void WaylandKeyboardKeyEvent(
+    void*               Data,
+    struct wl_keyboard* Keyboard,
+    u32                 Serial,
+    u32                 Time,
+    u32                 EvdevScancode,
+    u32                 State
+)
+{
+    Unused(Data);
+    Unused(Keyboard);
+    Unused(Serial);
+    Unused(Time);
+
+    b32 IsDown = (State == WL_KEYBOARD_KEY_STATE_PRESSED);
+
+    u32 XkbScancode = 8 + EvdevScancode;
+    xkb_keysym_t KeySym = xkb_state_key_get_one_sym(Wayland.XkbState, XkbScancode);
+
+    input_button Button = InputButton_Nil;
+
+    switch (KeySym)
+    {
+        default: Button = InputButton_Nil; break;
+
+        case XKB_KEY_w: case XKB_KEY_W: Button = InputButton_KeyW; break;
+        case XKB_KEY_a: case XKB_KEY_A: Button = InputButton_KeyA; break;
+        case XKB_KEY_s: case XKB_KEY_S: Button = InputButton_KeyS; break;
+        case XKB_KEY_d: case XKB_KEY_D: Button = InputButton_KeyD; break;
+
+        case XKB_KEY_Left:  Button = InputButton_KeyLeft;   break;
+        case XKB_KEY_Right: Button = InputButton_KeyRight;  break;
+        case XKB_KEY_Up:    Button = InputButton_KeyUp;     break;
+        case XKB_KEY_Down:  Button = InputButton_KeyDown;   break;
+
+        case XKB_KEY_F11:   Button = InputButton_KeyF11;    break;
+    }
+
+    if (Button != InputButton_Nil)
+        InputReportButton(Button, IsDown);
+}
+
+local void WaylandKeyboardModifiersEvent(
+    void*               Data,
+    struct wl_keyboard* Keyboard,
+    u32                 Serial,
+    u32                 ModifiersDepressed,
+    u32                 ModifiersLatched,
+    u32                 ModifiersLocked,
+    u32                 Group
+)
+{
+    Unused(Data);
+    Unused(Keyboard);
+    Unused(Serial);
+    Unused(ModifiersDepressed);
+    Unused(ModifiersLatched);
+    Unused(ModifiersLocked);
+    Unused(Group);
+}
+
+local void WaylandKeyboardRepeatInfoEvent(
+    void*               Data,
+    struct wl_keyboard* Keyboard,
+    s32                 Rate,
+    s32                 Delay
+)
+{
+    Unused(Data);
+    Unused(Keyboard);
+    Unused(Rate);
+    Unused(Delay);
+}
+
+local struct wl_keyboard_listener WaylandKeyboardListener =
+{
+    .keymap                     = WaylandKeyboardKeymapEvent,
+    .enter                      = WaylandKeyboardEnterEvent,
+    .leave                      = WaylandKeyboardLeaveEvent,
+    .key                        = WaylandKeyboardKeyEvent,
+    .modifiers                  = WaylandKeyboardModifiersEvent,
+    .repeat_info                = WaylandKeyboardRepeatInfoEvent,
+};
+
 local void WaylandSeatCapabilitiesEvent(
     void*           Data,
     struct wl_seat* Seat,
@@ -436,6 +590,9 @@ local void WaylandSeatCapabilitiesEvent(
 
     if (Wayland.Pointer)
         wl_pointer_add_listener(Wayland.Pointer, &WaylandPointerListener, 0);
+
+    if (Wayland.Keyboard)
+        wl_keyboard_add_listener(Wayland.Keyboard, &WaylandKeyboardListener, 0);
 }
 
 local void WaylandSeatNameEvent(

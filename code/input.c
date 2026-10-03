@@ -22,6 +22,18 @@ typedef enum
     InputButton_MouseRight,
     InputButton_MouseMiddle,
 
+    InputButton_KeyW,
+    InputButton_KeyA,
+    InputButton_KeyS,
+    InputButton_KeyD,
+
+    InputButton_KeyLeft,
+    InputButton_KeyRight,
+    InputButton_KeyUp,
+    InputButton_KeyDown,
+
+    InputButton_KeyF11,
+
     InputButton_COUNT,
 } input_button;
 

@@ -35,7 +35,8 @@ LinkFlags=" \
     -Wl,-nostdlib \
     -Wl,-e,EntryPoint \
     -lc \
-    -lwayland-client"
+    -lwayland-client \
+    -lxkbcommon"
 
 $Compiler $CompileFlags $SourceFile $LinkFlags
 
