@@ -104,6 +104,47 @@ local void CommitMemory(void* Memory, usize Size)
     }
 }
 
+local usize GetWallClock(void)
+{
+    struct timespec Now = {0};
+    clock_gettime(CLOCK_MONOTONIC, &Now);
+
+    usize Result =
+        ((Now.tv_sec  & 0x3FFFFFFFF) << 30) |
+        ((Now.tv_nsec & 0x3FFFFFFF));
+
+    return (Result);
+}
+
+local f64 GetSecondsElapsed(usize FromWallClock, usize ToWallClock)
+{
+    ssize Delta         = (ssize)ToWallClock - (ssize)FromWallClock;
+    ssize DeltaSec      = (Delta >> 30);
+    ssize DeltaNanosec  = (Delta & 0x3FFFFFFF);
+
+    f64 Result = (f64)DeltaSec + (f64)DeltaNanosec * 1e-9;
+    return (Result);
+}
+
+local void WaitSeconds(f64 Seconds)
+{
+    usize Nanoseconds = (usize)(Seconds * 1e9);
+
+    struct timespec Duration =
+    {
+        .tv_sec     = Nanoseconds / 1000000000,
+        .tv_nsec    = Nanoseconds % 1000000000,
+    };
+
+    while (Duration.tv_sec && Duration.tv_nsec)
+    {
+        struct timespec Remainder = {0};
+        nanosleep(&Duration, &Remainder);
+
+        Duration = Remainder;
+    }
+}
+
 local string GetEnv(string Name)
 {
     string Found = NilString;

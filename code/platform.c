@@ -22,6 +22,10 @@ local void*     GetVulkanLoader     (void); // NOTE(vak): Returns vkGetInstanceP
 local void*     ReserveMemory       (usize Size);
 local void      CommitMemory        (void* Memory, usize Size);
 
+local usize     GetWallClock        (void);
+local f64       GetSecondsElapsed   (usize FromWallClock, usize ToWallClock);
+local void      WaitSeconds         (f64 Seconds);
+
 local string    GetEnv              (string Name);
 local usize     WriteStdOut         (void* Data, usize Size);
 local usize     WriteStdErr         (void* Data, usize Size);

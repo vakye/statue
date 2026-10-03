@@ -64,17 +64,31 @@ struct stat
 #define MAP_ANON    (0x20)
 
 // ==================================================================
+// NOTE(vak): Clock
+// ==================================================================
+
+#define CLOCK_MONOTONIC (1)
+
+struct timespec
+{
+    usize tv_sec;
+    ssize tv_nsec;
+};
+
+// ==================================================================
 // NOTE(vak): Syscall wrappers implemented by this file
 // ==================================================================
 
-local ssize read        (s32 FileDescriptor, void* Data, usize Size);
-local ssize write       (s32 FileDescriptor, void* Data, usize Size);
-local s32   open        (const char* Path, s32 Flags, s32 Mode);
-local s32   close       (s32 FileDescriptor);
-local s32   fstat       (s32 FileDescriptor, struct stat* Buffer);
-local void* mmap        (void* Base, usize Length, int ProtectionFlags, int Flags, int FileDescriptor, ssize Offset);
-local s32   mprotect    (void* Base, usize Length, int ProtectionFlags);
-local void  exit_group  (s32 Status);
+local ssize read            (s32 FileDescriptor, void* Data, usize Size);
+local ssize write           (s32 FileDescriptor, void* Data, usize Size);
+local s32   open            (const char* Path, s32 Flags, s32 Mode);
+local s32   close           (s32 FileDescriptor);
+local s32   fstat           (s32 FileDescriptor, struct stat* Buffer);
+local void* mmap            (void* Base, usize Length, int ProtectionFlags, int Flags, int FileDescriptor, ssize Offset);
+local s32   mprotect        (void* Base, usize Length, int ProtectionFlags);
+local s32   nanosleep       (const struct timespec* Duration, struct timespec* Remainder);
+local s32   clock_gettime   (s32 ClockID, struct timespec* Timespec);
+local void  exit_group      (s32 Status);
 
 // ==================================================================
 // NOTE(vak): Syscall
@@ -90,6 +104,8 @@ typedef enum
     SyscallNR_FStat         = (5),
     SyscallNR_MMap          = (9),
     SyscallNR_MProtect      = (10),
+    SyscallNR_NanoSleep     = (35),
+    SyscallNR_ClockGetTime  = (228),
     SyscallNR_ExitGroup     = (231),
 #else
     #error Linux syscall numbers are not defined for this architecture.
@@ -197,6 +213,28 @@ local s32 mprotect(void* Base, usize Length, int ProtectionFlags)
         Base,
         Length,
         ProtectionFlags
+    );
+
+    return (Result);
+}
+
+local s32 clock_gettime(s32 ClockID, struct timespec* Timespec)
+{
+    s32 Result = (s32)LinuxSyscall2(
+        SyscallNR_ClockGetTime,
+        ClockID,
+        Timespec
+    );
+
+    return (Result);
+}
+
+local s32 nanosleep(const struct timespec* Duration, struct timespec* Remainder)
+{
+    s32 Result = (s32)LinuxSyscall2(
+        SyscallNR_NanoSleep,
+        Duration,
+        Remainder
     );
 
     return (Result);
