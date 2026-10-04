@@ -16,6 +16,7 @@ local u32  WaylandGetWindowSizeY    (void);
 local b32  WaylandIsWindowClosed    (void);
 local void WaylandPollEvents        (void);
 local void WaylandPresentWindow     (void);
+local f32  WaylandGetRefreshRate    (void);
 
 // ==================================================================
 // NOTE(vak): Implementation
@@ -27,6 +28,9 @@ local void WaylandPresentWindow     (void);
 
 typedef struct
 {
+    // NOTE(vak): Information reported by wl_output
+    f32 RefreshRate;
+
     // NOTE(vak): Size reported by xdg_toplevel_resize
     u32 TopLevelSizeX;
     u32 TopLevelSizeY;
@@ -37,8 +41,11 @@ typedef struct
     u32 SizeX;
     u32 SizeY;
 
+    // NOTE(vak): State keeping
     b32 IsFullscreen;
     b32 HasClosed;
+
+    // NOTE(vak): Objects
 
     struct wl_display*      Display;
     struct wl_registry*     Registry;
@@ -47,6 +54,8 @@ typedef struct
     struct wl_surface*      Surface;
     struct xdg_surface*     XdgSurface;
     struct xdg_toplevel*    XdgTopLevel;
+
+    struct wl_output*       Output;
 
     struct wl_seat*         Seat;
     struct wl_pointer*      Pointer;
@@ -98,6 +107,13 @@ local void WaylandRegistryGlobalEvent(
         if (!Wayland.XdgWmBase)
             WaylandFatalError(Str("failed to bind xdg_wm_base"));
     }
+    else if (StringEquals(Interface, CString(wl_output_interface.name)))
+    {
+        Wayland.Output = wl_registry_bind(Wayland.Registry, Name, &wl_output_interface, Version);
+
+        if (!Wayland.Output)
+            WaylandFatalError(Str("failed to bind wl_output"));
+    }
     else if (StringEquals(Interface, CString(wl_seat_interface.name)))
     {
         Wayland.Seat = wl_registry_bind(Wayland.Registry, Name, &wl_seat_interface, Version);
@@ -110,6 +126,103 @@ local void WaylandRegistryGlobalEvent(
 local struct wl_registry_listener WaylandRegistryListener =
 {
     .global = WaylandRegistryGlobalEvent,
+};
+
+local void WaylandOutputGeometryEvent(
+    void*               Data,
+    struct wl_output*   Output,
+    s32                 X,
+    s32                 Y,
+    s32                 PhysicalWidth,
+    s32                 PhysicalHeight,
+    s32                 Subpixel,
+    const char*         Make,
+    const char*         Model,
+    s32                 Transform
+)
+{
+    Unused(Data);
+    Unused(Output);
+    Unused(X);
+    Unused(Y);
+    Unused(PhysicalWidth);
+    Unused(PhysicalHeight);
+    Unused(Subpixel);
+    Unused(Make);
+    Unused(Model);
+    Unused(Transform);
+}
+
+local void WaylandOutputModeEvent(
+    void*               Data,
+    struct wl_output*   Output,
+    u32                 Flags,
+    s32                 Width,
+    s32                 Height,
+    s32                 Refresh
+)
+{
+    Unused(Data);
+    Unused(Output);
+    Unused(Width);
+    Unused(Height);
+
+    if (Flags & WL_OUTPUT_MODE_CURRENT)
+    {
+        Wayland.RefreshRate = Refresh * 0.001f;
+    }
+}
+
+local void WaylandOutputDoneEvent(
+    void*               Data,
+    struct wl_output*   Output
+)
+{
+    Unused(Data);
+    Unused(Output);
+}
+
+local void WaylandOutputScaleEvent(
+    void*               Data,
+    struct wl_output*   Output,
+    s32                 Factor
+)
+{
+    Unused(Data);
+    Unused(Output);
+    Unused(Factor);
+}
+
+local void WaylandOutputNameEvent(
+    void*               Data,
+    struct wl_output*   Output,
+    const char*         Name
+)
+{
+    Unused(Data);
+    Unused(Output);
+    Unused(Name);
+}
+
+local void WaylandOutputDescriptionEvent(
+    void*               Data,
+    struct wl_output*   Output,
+    const char*         Description
+)
+{
+    Unused(Data);
+    Unused(Output);
+    Unused(Description);
+}
+
+local struct wl_output_listener WaylandOutputListener =
+{
+    .geometry       = WaylandOutputGeometryEvent,
+    .mode           = WaylandOutputModeEvent,
+    .done           = WaylandOutputDoneEvent,
+    .scale          = WaylandOutputScaleEvent,
+    .name           = WaylandOutputNameEvent,
+    .description    = WaylandOutputDescriptionEvent,
 };
 
 local void WaylandXdgWmBasePingEvent(
@@ -631,6 +744,10 @@ local void WaylandSetupWindow(void)
     if (!Wayland.XdgWmBase)
         WaylandFatalError(Str("no xdg_wm_base"));
 
+    if (!Wayland.Output)
+        WaylandFatalError(Str("no wl_output"));
+
+    wl_output_add_listener(Wayland.Output, &WaylandOutputListener, 0);
     xdg_wm_base_add_listener(Wayland.XdgWmBase, &WaylandXdgWmBaseListener, 0);
 
     if (Wayland.Seat)
@@ -693,5 +810,10 @@ local void WaylandPollEvents(void)
 local void WaylandPresentWindow(void)
 {
     wl_surface_commit(Wayland.Surface);
+}
+
+local f32 WaylandGetRefreshRate(void)
+{
+    return (Wayland.RefreshRate);
 }
 

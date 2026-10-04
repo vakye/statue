@@ -6,6 +6,7 @@
 #include "input.c"
 #include "memory.c"
 #include "render.c"
+#include "game.c"
 #include "main.c"
 
 // ==================================================================

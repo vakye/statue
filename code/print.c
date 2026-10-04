@@ -35,6 +35,7 @@ local usize Print           (print_out Out, string Message);
 local usize Println         (print_out Out, string Message);
 local usize PrintUSize      (print_out Out, usize Value);
 local usize PrintSSize      (print_out Out, ssize Value);
+local usize PrintF32        (print_out Out, f32 Value);
 
 // ==================================================================
 // NOTE(vak): Implementation
@@ -119,6 +120,34 @@ local usize PrintSSize(print_out Out, ssize Value)
     }
 
     Result += PrintUSize(Out, Value);
+    return (Result);
+}
+
+local usize PrintF32(print_out Out, f32 Value)
+{
+    usize Result = 0;
+
+    if (Value < 0)
+    {
+        Result += PrintCharacter(Out, '-');
+        Value = -Value;
+    }
+
+    usize IntegerPart = (usize)Value;
+    f32   DecimalPart = Value - IntegerPart;
+
+    Result += PrintUSize(Out, IntegerPart);
+    Result += PrintCharacter(Out, '.');
+
+    for (u32 Index = 0; Index < 3; Index++)
+    {
+        DecimalPart *= 10.0f;
+        char Digit = '0' + (char)(DecimalPart);
+        DecimalPart -= (usize)DecimalPart;
+
+        Result += PrintCharacter(Out, Digit);
+    }
+
     return (Result);
 }
 

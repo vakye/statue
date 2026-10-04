@@ -11,11 +11,14 @@ local void Main(void)
     SetupRenderer();
     ToggleFullscreen();
 
-    f64 AccumulatedTime = 0.0f;
-    f32 UpdateTimeStep  = 1.0f/1.0f;
-    f32 RenderTimeStep  = 1.0f/2.0f;
+    game_state Game = {0};
+    GameSetup(&Game);
 
-    usize FrameBegin = GetWallClock();
+    f64 AccumulatedTime = 0.0f;
+    f32 UpdateTimeStep  = 1.0f/128.0f;
+    f32 RenderTimeStep  = 1.0f/GetRefreshRate();
+
+    time FrameBegin = GetWallClock();
 
     while (!IsWindowClosed())
     {
@@ -26,22 +29,13 @@ local void Main(void)
         if (InputIsPressed(InputButton_KeyF11))
             ToggleFullscreen();
 
-        // NOTE(vak): Update
         while (AccumulatedTime >= UpdateTimeStep)
         {
-            Println(StdOut, Str("Update..."));
+            GameTick(&Game, UpdateTimeStep);
             AccumulatedTime -= UpdateTimeStep;
         }
 
-        // NOTE(vak): Render
-        {
-            Println(StdOut, Str("Render..."));
-
-            SetClearColor(V4(1.0f, 1.0f, 1.0f, 1.0f));
-            BeginRendering();
-
-            EndRendering();
-        }
+        GameRender(&Game, AccumulatedTime);
 
         PresentWindow();
 
@@ -49,7 +43,7 @@ local void Main(void)
 
         while (DeltaTime < RenderTimeStep)
         {
-            WaitSeconds(RenderTimeStep - DeltaTime);
+            Wait(RenderTimeStep - DeltaTime);
             DeltaTime = GetSecondsElapsed(FrameBegin, GetWallClock());
         }
 

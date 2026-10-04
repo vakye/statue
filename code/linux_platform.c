@@ -68,17 +68,9 @@ local void PresentWindow(void)
     WaylandPresentWindow();
 }
 
-local void* GetVulkanLoader(void)
+local f32 GetRefreshRate(void)
 {
-    void* VulkanLibrary = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
-
-    if (!VulkanLibrary)
-        VulkanLibrary = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
-
-    if (!VulkanLibrary)
-        return (0);
-
-    return dlsym(VulkanLibrary, "vkGetInstanceProcAddr");
+    return WaylandGetRefreshRate();
 }
 
 local void* ReserveMemory(usize Size)
@@ -104,36 +96,33 @@ local void CommitMemory(void* Memory, usize Size)
     }
 }
 
-local usize GetWallClock(void)
+local time GetWallClock(void)
 {
     struct timespec Now = {0};
     clock_gettime(CLOCK_MONOTONIC, &Now);
 
-    usize Result =
-        ((Now.tv_sec  & 0x3FFFFFFFF) << 30) |
-        ((Now.tv_nsec & 0x3FFFFFFF));
+    time Result = (Now.tv_nsec) + (Now.tv_sec * 1000000000);
 
     return (Result);
 }
 
-local f64 GetSecondsElapsed(usize FromWallClock, usize ToWallClock)
+local f64 GetSecondsElapsed(time From, time To)
 {
-    ssize Delta         = (ssize)ToWallClock - (ssize)FromWallClock;
-    ssize DeltaSec      = (Delta >> 30);
-    ssize DeltaNanosec  = (Delta & 0x3FFFFFFF);
+    ssize Nanoseconds = To - From;
+    f64 Result = (f64)(Nanoseconds) * 1e-9;
 
-    f64 Result = (f64)DeltaSec + (f64)DeltaNanosec * 1e-9;
     return (Result);
 }
 
-local void WaitSeconds(f64 Seconds)
+local void Wait(f64 Seconds)
 {
-    usize Nanoseconds = (usize)(Seconds * 1e9);
+    if (Seconds < 0.0)
+        return;
 
     struct timespec Duration =
     {
-        .tv_sec     = Nanoseconds / 1000000000,
-        .tv_nsec    = Nanoseconds % 1000000000,
+        .tv_sec     = (usize)(Seconds),
+        .tv_nsec    = (ssize)(Seconds * 1e9) % 1000000000,
     };
 
     while (Duration.tv_sec && Duration.tv_nsec)
@@ -185,5 +174,18 @@ local usize WriteStdErr(void* Data, usize Size)
 local void Exit(u8 Code)
 {
     exit_group(Code);
+}
+
+local void* GetVulkanLoader(void)
+{
+    void* VulkanLibrary = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+
+    if (!VulkanLibrary)
+        VulkanLibrary = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+
+    if (!VulkanLibrary)
+        return (0);
+
+    return dlsym(VulkanLibrary, "vkGetInstanceProcAddr");
 }
 

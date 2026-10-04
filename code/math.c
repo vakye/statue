@@ -146,6 +146,16 @@ static f32 InvSquareRoot(f32 X)
 }
 
 // ==================================================================
+// NOTE(vak): Interpolation
+// ==================================================================
+
+local f32 LerpF32(f32 From, f32 To, f32 T)
+{
+    f32 Result = From + (To - From)*T;
+    return (Result);
+}
+
+// ==================================================================
 // NOTE(vak): 2-element vector
 // ==================================================================
 
@@ -177,6 +187,8 @@ static v2 V2ScalarAdd           (f32 A, v2 B)               { return (v2){.E = {
 static v2 V2ScalarSub           (f32 A, v2 B)               { return (v2){.E = {A - B.X, A - B.Y}}; }
 static v2 V2ScalarMul           (f32 A, v2 B)               { return (v2){.E = {A * B.X, A * B.Y}}; }
 static v2 V2ScalarDiv           (f32 A, v2 B)               { return (v2){.E = {A / B.X, A / B.Y}}; }
+
+static v2 V2Lerp                (v2 A, v2 B, f32 T)         { return V2Add(A, V2MulScalar(V2Sub(B, A), T)); }
 
 static f32 V2Dot                (v2 A, v2 B)                { return (A.X*B.X + A.Y*B.Y); }
 static f32 V2LengthSq           (v2 A)                      { return V2Dot(A, A); }
@@ -219,6 +231,8 @@ static v3 V3ScalarSub           (f32 A, v3 B)                   { return (v3){.E
 static v3 V3ScalarMul           (f32 A, v3 B)                   { return (v3){.E = {A * B.X, A * B.Y, A * B.Z}}; }
 static v3 V3ScalarDiv           (f32 A, v3 B)                   { return (v3){.E = {A / B.X, A / B.Y, A / B.Z}}; }
 
+static v3 V3Lerp                (v3 A, v3 B, f32 T)             { return V3Add(A, V3MulScalar(V3Sub(B, A), T)); }
+
 static f32 V3Dot                (v3 A, v3 B)                    { return (A.X*B.X + A.Y*B.Y + A.Z*B.Z); }
 static f32 V3LengthSq           (v3 A)                          { return V3Dot(A, A); }
 static f32 V3Length             (v3 A)                          { return SquareRoot(V3Dot(A, A)); }
@@ -258,6 +272,8 @@ static v4 V4ScalarAdd           (f32 A, v4 B)                   { return (v4){.E
 static v4 V4ScalarSub           (f32 A, v4 B)                   { return (v4){.E = {A - B.X, A - B.Y, A - B.Z, A - B.W}}; }
 static v4 V4ScalarMul           (f32 A, v4 B)                   { return (v4){.E = {A * B.X, A * B.Y, A * B.Z, A * B.W}}; }
 static v4 V4ScalarDiv           (f32 A, v4 B)                   { return (v4){.E = {A / B.X, A / B.Y, A / B.Z, A / B.W}}; }
+
+static v4 V4Lerp                (v4 A, v4 B, f32 T)             { return V4Add(A, V4MulScalar(V4Sub(B, A), T)); }
 
 static f32 V4Dot                (v4 A, v4 B)                    { return (A.X*B.X + A.Y*B.Y + A.Z*B.Z + A.W*B.W); }
 static f32 V4LengthSq           (v4 A)                          { return V4Dot(A, A); }
