@@ -52,19 +52,14 @@ local void GameSetup(game_state* Game)
     Game->PlayerColor   = V4(1.0f, 0.8f, 0.5f, 1.0f);
 }
 
-local v2 ToScreenP(game_state* Game, v2 WorldP)
+local v2 ToWorldUnits(game_state* Game, v2 ScreenP)
 {
-    v2 PredictedDelta = V2Add(
-        V2Sub(Game->CameraP, Game->CameraLastP),
-        V2MulScalar(Game->CameraDDP, 0.5f*Square(Game->StrayTime))
-    );
-
-    v2 CameraP      = V2Add(Game->CameraP, PredictedDelta);
+    v2 CameraP      = Game->CameraP;
     v2 CameraSize   = V2(Game->AspectRatio / Game->FocalLength, 1.0f / Game->FocalLength);
     v2 CameraMin    = V2Sub(CameraP, V2MulScalar(CameraSize, 0.5f));
     v2 WindowSize   = V2((f32)GetWindowSizeX(), (f32)GetWindowSizeY());
 
-    v2 Result = V2Mul(V2Div(V2Sub(WorldP, CameraMin), CameraSize), WindowSize);
+    v2 Result = V2Add(V2Mul(V2Div(ScreenP, WindowSize), CameraSize), CameraMin);
 
     return (Result);
 }
@@ -84,8 +79,8 @@ local void GameTick(game_state* Game, f32 DeltaTime)
             1.0f * ((s32)MoveD - (s32)MoveU)
         ));
 
-        f32 Friction = 70.0f;
-        f32 Force = Friction * 7.5f;
+        f32 Friction = 50.0f;
+        f32 Force = Friction * 8.0f;
 
         v2 PlayerDP = V2DivScalar(V2Sub(Game->PlayerP, Game->PlayerLastP), DeltaTime);
 
@@ -104,10 +99,16 @@ local void GameTick(game_state* Game, f32 DeltaTime)
     }
 
     {
-        v2 Delta = V2Sub(Game->PlayerP, Game->CameraP);
+        v2 MouseWorldP = ToWorldUnits(Game, InputGetMouseP());
+
+        f32 MouseOffsetFactor = 0.05f;
+        v2 MouseOffset = V2ScalarMul(MouseOffsetFactor, V2Sub(MouseWorldP, Game->PlayerP));
+
+        v2 TargetP = V2Add(Game->PlayerP, MouseOffset);
+        v2 Delta = V2Sub(TargetP, Game->CameraP);
 
         f32 Friction = 50.0f;
-        f32 Force = Friction * 4.0f;
+        f32 Force = Friction * 5.0f;
 
         v2 CameraDP = V2DivScalar(V2Sub(Game->CameraP, Game->CameraLastP), DeltaTime);
 
@@ -126,11 +127,28 @@ local void GameTick(game_state* Game, f32 DeltaTime)
     }
 }
 
+local v2 ToPredictedScreenUnits(game_state* Game, v2 WorldP)
+{
+    v2 PredictedDelta = V2Add(
+        V2Sub(Game->CameraP, Game->CameraLastP),
+        V2MulScalar(Game->CameraDDP, 0.5f*Square(Game->StrayTime))
+    );
+
+    v2 CameraP      = V2Add(Game->CameraP, PredictedDelta);
+    v2 CameraSize   = V2(Game->AspectRatio / Game->FocalLength, 1.0f / Game->FocalLength);
+    v2 CameraMin    = V2Sub(CameraP, V2MulScalar(CameraSize, 0.5f));
+    v2 WindowSize   = V2((f32)GetWindowSizeX(), (f32)GetWindowSizeY());
+
+    v2 Result = V2Mul(V2Div(V2Sub(WorldP, CameraMin), CameraSize), WindowSize);
+
+    return (Result);
+}
+
 local void GameDrawRect(game_state* Game, rect2 RectInWorld, v4 Color)
 {
     rect2 RectInScreen = R2MinMax(
-        ToScreenP(Game, RectInWorld.Min),
-        ToScreenP(Game, RectInWorld.Max)
+        ToPredictedScreenUnits(Game, RectInWorld.Min),
+        ToPredictedScreenUnits(Game, RectInWorld.Max)
     );
 
     RenderRect(RectInScreen, Color);

@@ -15,7 +15,7 @@ local void Main(void)
     GameSetup(&Game);
 
     f64 AccumulatedTime = 0.0f;
-    f32 UpdateTimeStep  = 1.0f/128.0f;
+    f32 UpdateTimeStep  = 1.0f/80.0f;
     f32 RenderTimeStep  = 1.0f/GetRefreshRate();
 
     time FrameBegin = GetWallClock();
