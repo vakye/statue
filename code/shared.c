@@ -4,12 +4,12 @@
 //      + Compiler detection
 //      + Architecture detection
 //      + Operating system detection
-//      + Intrinsics includes (immintrin.h, ...)
 //      + Keywords
 //      + Macros
 //      + Types
 //      + Constants
 //      + Memory zero, fill, copy, ...
+//      + Intrinsics
 //      + UTF-8 string
 //      + Bit masks
 // ==================================================================
@@ -92,14 +92,6 @@
 
 #if !defined(PlatformMacOS)
     #define PlatformMacOS (0)
-#endif
-
-// ==================================================================
-// NOTE(vak): Intrinsics include
-// ==================================================================
-
-#if ArchitectureX64
-    #include <immintrin.h>
 #endif
 
 // ==================================================================
@@ -227,6 +219,27 @@ CompileTimeAssert(sizeof(f64) == 8);
 #define SSizeMin  ((ssize)(1ull << (USizeBits - 1)))
 #define SSizeMax  ((ssize)((usize)SSizeMin - 1))
 #define USizeMax  (~((usize)0))
+
+// ==================================================================
+// NOTE(vak): Intrinsics
+// ==================================================================
+
+#if ArchitectureX64
+    #include <immintrin.h>
+#endif
+
+local u32 CountTrailingZeroes64(u64 Value)
+{
+#if ArchitectureX64
+    u32 Result = (u32)_tzcnt_u64(Value);
+#else
+    u32 Result = 0;
+    while ((Value & (1 << Result)) == 0)
+        Result++;
+#endif
+
+    return (Result);
+}
 
 // ==================================================================
 // NOTE(vak): Memory

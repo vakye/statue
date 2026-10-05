@@ -24,8 +24,6 @@ local void Main(void)
     {
         PollEvents();
 
-        // NOTE(vak): Controls
-
         if (InputIsPressed(InputButton_KeyF11))
             ToggleFullscreen();
 

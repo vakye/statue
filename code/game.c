@@ -14,6 +14,9 @@ typedef struct
     entity_id CameraID;
     entity_id PlayerID;
 
+    usize LastShootTime;
+    f32 ShootCooldown;
+
     // NOTE(vak): Render
 
     f32 StrayTime;
@@ -42,6 +45,7 @@ local void GameSetup(game_state* Game)
 
     {
         Game->PlayerID = MakeEntity();
+        Game->ShootCooldown = 0.05f;
 
         SetEntityProp   (Game->PlayerID, EntityProp_Render, true);
         SetEntityP      (Game->PlayerID, V2(0, 0));
@@ -109,7 +113,7 @@ local void GameTick(game_state* Game, f32 DeltaTime)
         SetEntityForce(Game->CameraID, ForceToApply);
     }
 
-    // NOTE(vak): Update player
+    // NOTE(vak): Update player movement
     {
         b32 MoveU = InputIsDown(InputButton_KeyW) || InputIsDown(InputButton_KeyUp);
         b32 MoveD = InputIsDown(InputButton_KeyS) || InputIsDown(InputButton_KeyDown);
@@ -134,14 +138,54 @@ local void GameTick(game_state* Game, f32 DeltaTime)
         SetEntityForce(Game->PlayerID, ForceToApply);
     }
 
-    // NOTE(vak): Integrate forces
+    // NOTE(vak): Update player shoot
+    if (InputIsDown(InputButton_MouseLeft))
+    {
+        f32 Elapsed = GetSecondsElapsed(Game->LastShootTime, GetWallClock());
+        if (Elapsed >= Game->ShootCooldown)
+        {
+            v2 MouseWorldP = ToWorldUnits(Game, InputGetMouseP());
+            v2 PlayerP = GetEntityP(Game->PlayerID);
+
+            v2 PlayerDP = GetEntityDP(Game->PlayerID);
+            v2 AimDirection = V2NormalizeOrZero(V2Sub(MouseWorldP, PlayerP));
+
+            f32 Lifetime = 1.0f;
+
+            f32 Radius = 1.05f * V2Length(GetEntitySize(Game->PlayerID));
+            f32 Speed = 20.0f + Maximum(0.0f, V2Dot(PlayerDP, AimDirection));
+            f32 Friction = Speed / Lifetime;
+
+            v2 P        = V2Add(PlayerP, V2MulScalar(AimDirection, Radius));
+            v2 DP       = V2MulScalar(AimDirection, Speed);
+            v2 DDP      = V2MulScalar(AimDirection, -Friction);
+            v2 Size     = V2(0.4f, 0.4f);
+            v4 Color    = V4(0.6f, 0.7f, 1.0f, 1.0f);
+
+            entity_id BulletID = MakeEntity();
+
+            SetEntityProp       (BulletID, EntityProp_Render, true);
+            SetEntityProp       (BulletID, EntityProp_Lifetime, true);
+            SetEntityP          (BulletID, P);
+            SetEntityDP         (BulletID, DP);
+            SetEntityForce      (BulletID, DDP);
+            SetEntitySize       (BulletID, Size);
+            SetEntityColor      (BulletID, Color);
+            SetEntityLifetime   (BulletID, Lifetime);
+
+            Game->LastShootTime = GetWallClock();
+        }
+    }
+
+    // NOTE(vak): Do physics, timed removal, ... for everyone
+
     for (
         entity_iter Iter = IterateEntities();
         Iter.EntityID;
         NextEntity(&Iter)
     )
     {
-        SimulateEntity(Iter.EntityID, DeltaTime);
+        UpdateEntity(Iter.EntityID, DeltaTime);
     }
 }
 
