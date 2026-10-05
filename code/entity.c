@@ -81,36 +81,35 @@ typedef struct
 
 typedef struct
 {
-    u64     Level1;
-    u64     Level0[64];
+    u64     Masks[64];
     entity  Entities[4096];
 } entity_chunk;
 
 local entity_chunk EntityChunk = {0};
 
-local void MarkEntitySlotUsed(u32 Index)
+local void MarkEntitySlotUsed(usize Index)
 {
-    u32 Index0 = Index % 64;
-    u32 Index1 = Index / 64;
+    usize BitIndex  = Index % 64;
+    usize MaskIndex = Index / 64;
 
-    EntityChunk.Level0[Index1] |= ((u64)1 << Index0);
-
-    b32 Filled = (EntityChunk.Level0[Index1] == U64Max);
-
-    EntityChunk.Level1 |= ((u64)Filled << Index1);
+    EntityChunk.Masks[MaskIndex] |= ((u64)1 << BitIndex);
 }
 
-local void MarkEntitySlotFree(u32 Index)
+local void MarkEntitySlotFree(usize Index)
 {
-    u32 Index0 = Index % 64;
-    u32 Index1 = Index / 64;
+    usize BitIndex  = Index % 64;
+    usize MaskIndex = Index / 64;
 
-    EntityChunk.Level0[Index1] &= ~((u64)1 << Index0);
+    EntityChunk.Masks[MaskIndex] &= ~((u64)1 << BitIndex);
+}
 
-    b32 Filled = (EntityChunk.Level0[Index1] == U64Max);
+local b32 IsEntitySlotUsed(usize Index)
+{
+    usize BitIndex  = Index % 64;
+    usize MaskIndex = Index / 64;
 
-    EntityChunk.Level1 &= ~((u64)1      << Index1);
-    EntityChunk.Level1 |=  ((u64)Filled << Index1);
+    b32 Result = (EntityChunk.Masks[MaskIndex] >> BitIndex) & 1;
+    return (Result);
 }
 
 local entity* GetEntity(entity_id EntityID)
@@ -121,21 +120,24 @@ local entity* GetEntity(entity_id EntityID)
 
 local entity_id MakeEntity(void)
 {
-    if (EntityChunk.Level1 == U64Max)
-        return (0);
+    entity_id Result = 0;
 
-    u32 Index1 = CountTrailingZeroes64(~EntityChunk.Level1);
-    u32 Index0 = CountTrailingZeroes64(~EntityChunk.Level0[Index1]);
-    u32 Index  = Index1*64 + Index0;
+    for (usize Index = 0; Index < ArrayCount(EntityChunk.Entities); Index++)
+    {
+        if (!IsEntitySlotUsed(Index))
+        {
+            Result = 1 + Index;
+            MarkEntitySlotUsed(Index);
+            break;
+        }
+    }
 
-    entity_id Result = 1 + Index;
-
-    MarkEntitySlotUsed(Index);
-
-    entity* Entity = GetEntity(Result);
-
-    ZeroStruct(Entity);
-    Entity->CreationTime = GetWallClock();
+    if (Result)
+    {
+        entity* Entity = GetEntity(Result);
+        ZeroStruct(Entity);
+        Entity->CreationTime = GetWallClock();
+    }
 
     return (Result);
 }
@@ -150,26 +152,14 @@ local entity_iter IterateEntities(void)
 {
     entity_iter Iter = {0};
 
-    u32 Index = 0;
-    for (;;)
+    for (usize Index = 0; Index < ArrayCount(EntityChunk.Entities); Index++)
     {
-        u32 BitIndex  = Index % 64;
-        u32 MaskIndex = Index / 64;
-
-        u64 Mask = EntityChunk.Level0[MaskIndex] >> BitIndex;
-        u32 MaxCount = (64 - BitIndex);
-
-        u32 Count = CountTrailingZeroes64(Mask);
-
-        Index += Count;
-        if (Count < MaxCount)
+        if (IsEntitySlotUsed(Index))
+        {
+            Iter.EntityID = 1 + Index;
             break;
+        }
     }
-
-    if (Index >= ArrayCount(EntityChunk.Entities))
-        Iter.EntityID = 0;
-    else
-        Iter.EntityID = 1 + Index;
 
     return (Iter);
 }
@@ -179,24 +169,12 @@ local void NextEntity(entity_iter* Iter)
     if (Iter->EntityID == 0)
         return;
 
-    u32 Index = Iter->EntityID;
+    usize Index = Iter->EntityID;
 
-    if (Index < ArrayCount(EntityChunk.Entities))
+    for (; Index < ArrayCount(EntityChunk.Entities); Index++)
     {
-        for (;;)
-        {
-            u32 BitIndex  = Index % 64;
-            u32 MaskIndex = Index / 64;
-
-            u64 Mask = EntityChunk.Level0[MaskIndex] >> BitIndex;
-            u32 MaxCount = (64 - BitIndex);
-
-            u32 Count = CountTrailingZeroes64(Mask);
-
-            Index += Count;
-            if (Count < MaxCount)
-                break;
-        }
+        if (IsEntitySlotUsed(Index))
+            break;
     }
 
     if (Index >= ArrayCount(EntityChunk.Entities))
