@@ -153,8 +153,11 @@ local entity_iter IterateEntities(void)
     u32 Index = 0;
     for (;;)
     {
-        u64 Mask = EntityChunk.Level0[Index / 64] >> Index;
-        u32 MaxCount = (64 - Index);
+        u32 BitIndex  = Index % 64;
+        u32 MaskIndex = Index / 64;
+
+        u64 Mask = EntityChunk.Level0[MaskIndex] >> BitIndex;
+        u32 MaxCount = (64 - BitIndex);
 
         u32 Count = CountTrailingZeroes64(Mask);
 
@@ -163,7 +166,7 @@ local entity_iter IterateEntities(void)
             break;
     }
 
-    if (Index == ArrayCount(EntityChunk.Entities))
+    if (Index >= ArrayCount(EntityChunk.Entities))
         Iter.EntityID = 0;
     else
         Iter.EntityID = 1 + Index;
@@ -182,8 +185,11 @@ local void NextEntity(entity_iter* Iter)
     {
         for (;;)
         {
-            u64 Mask = EntityChunk.Level0[Index / 64] >> Index;
-            u32 MaxCount = (64 - Index);
+            u32 BitIndex  = Index % 64;
+            u32 MaskIndex = Index / 64;
+
+            u64 Mask = EntityChunk.Level0[MaskIndex] >> BitIndex;
+            u32 MaxCount = (64 - BitIndex);
 
             u32 Count = CountTrailingZeroes64(Mask);
 

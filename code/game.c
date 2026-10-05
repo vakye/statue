@@ -45,7 +45,7 @@ local void GameSetup(game_state* Game)
 
     {
         Game->PlayerID = MakeEntity();
-        Game->ShootCooldown = 0.05f;
+        Game->ShootCooldown = 0.01f;
 
         SetEntityProp   (Game->PlayerID, EntityProp_Render, true);
         SetEntityP      (Game->PlayerID, V2(0, 0));
